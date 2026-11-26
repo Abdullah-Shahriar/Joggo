@@ -2,34 +2,74 @@
 
 import { useIsFetching } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { LoaderHelix } from "@/components/ui/loader-helix";
 import { APP_NAME } from "@/lib/constants";
 
-const MIN_OVERLAY_MS = 350;
+const MIN_OVERLAY_MS = 750;
+const FADE_OUT_MS = 180;
 const MAX_OVERLAY_MS = 5000;
 
 export function RouteProgressBar() {
   const pathname = usePathname();
   const fetching = useIsFetching();
-  const [routeOverlay, setRouteOverlay] = useState(false);
+
+  const [visible, setVisible] = useState(false);
+  const [fading, setFading] = useState(false);
+
+  const prevPathRef = useRef<string>(pathname);
   const shownAtRef = useRef<number>(0);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const clearTimers = () => {
+  const clearTimers = useCallback(() => {
     if (hideTimerRef.current) {
       clearTimeout(hideTimerRef.current);
       hideTimerRef.current = null;
+    }
+    if (fadeTimerRef.current) {
+      clearTimeout(fadeTimerRef.current);
+      fadeTimerRef.current = null;
     }
     if (safetyTimerRef.current) {
       clearTimeout(safetyTimerRef.current);
       safetyTimerRef.current = null;
     }
-  };
+  }, []);
 
-  // Intercept clicks on internal navigation links so the DNA loader appears immediately
+  const scheduleHide = useCallback(
+    (delayMs: number) => {
+      clearTimers();
+      hideTimerRef.current = setTimeout(() => {
+        setFading(true);
+        fadeTimerRef.current = setTimeout(() => {
+          setVisible(false);
+          setFading(false);
+        }, FADE_OUT_MS);
+      }, Math.max(0, delayMs));
+    },
+    [clearTimers],
+  );
+
+  const triggerOverlay = useCallback(() => {
+    clearTimers();
+    shownAtRef.current = Date.now();
+    setFading(false);
+    setVisible(true);
+
+    // Safety fallback so overlay can never stick if a navigation is cancelled
+    safetyTimerRef.current = setTimeout(() => {
+      setFading(true);
+      fadeTimerRef.current = setTimeout(() => {
+        setVisible(false);
+        setFading(false);
+      }, FADE_OUT_MS);
+    }, MAX_OVERLAY_MS);
+  }, [clearTimers]);
+
+  // 1. Intercept clicks on any internal navigation link so the DNA animation appears immediately
   useEffect(() => {
     const handleDocumentClick = (e: MouseEvent) => {
       if (e.defaultPrevented || e.button !== 0) return;
@@ -61,42 +101,38 @@ export function RouteProgressBar() {
       if (dest.origin !== window.location.origin) return;
       if (dest.pathname === pathname) return;
 
-      clearTimers();
-      shownAtRef.current = Date.now();
-      setRouteOverlay(true);
-
-      // Safety timeout so overlay can never stick if navigation is aborted
-      safetyTimerRef.current = setTimeout(() => {
-        setRouteOverlay(false);
-      }, MAX_OVERLAY_MS);
+      triggerOverlay();
     };
 
     document.addEventListener("click", handleDocumentClick, true);
     return () => {
       document.removeEventListener("click", handleDocumentClick, true);
     };
-  }, [pathname]);
+  }, [pathname, triggerOverlay]);
 
-  // Dismiss overlay smoothly once the destination route finishes rendering
+  // 2. Also handle programmatic navigations (router.push / router.replace) & dismiss cleanly
   useEffect(() => {
-    if (!routeOverlay) return;
-    const elapsed = Date.now() - shownAtRef.current;
-    const remaining = Math.max(0, MIN_OVERLAY_MS - elapsed);
+    if (prevPathRef.current !== pathname) {
+      prevPathRef.current = pathname;
+      if (!visible) {
+        shownAtRef.current = Date.now();
+        setFading(false);
+        setVisible(true);
+        scheduleHide(MIN_OVERLAY_MS);
+      } else {
+        const elapsed = Date.now() - shownAtRef.current;
+        scheduleHide(Math.max(0, MIN_OVERLAY_MS - elapsed));
+      }
+    }
+  }, [pathname, visible, scheduleHide]);
 
-    clearTimers();
-    hideTimerRef.current = setTimeout(() => {
-      setRouteOverlay(false);
-    }, remaining);
-
-    return () => {
-      clearTimers();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  useEffect(() => {
+    return () => clearTimers();
+  }, [clearTimers]);
 
   return (
     <>
-      {fetching > 0 && !routeOverlay && (
+      {fetching > 0 && !visible && (
         <div
           aria-hidden="true"
           className="fixed left-0 top-0 z-50 h-0.5 w-full overflow-hidden bg-accent-tint"
@@ -105,14 +141,16 @@ export function RouteProgressBar() {
         </div>
       )}
 
-      {routeOverlay && (
+      {visible && (
         <div
           role="status"
           aria-live="polite"
           aria-label={`Loading ${APP_NAME}`}
-          className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-bg/95 backdrop-blur-sm"
+          className={`fixed inset-0 z-[100] flex flex-col items-center justify-center gap-5 bg-bg/95 backdrop-blur-sm transition-opacity duration-150 ${
+            fading ? "opacity-0" : "opacity-100"
+          }`}
         >
-          <LoaderHelix variant="dna" dots={12} speed={1.6} />
+          <LoaderHelix variant="dna" dots={12} speed={1.5} />
           <div className="flex items-center gap-2 text-sm font-medium text-text-muted">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -121,7 +159,7 @@ export function RouteProgressBar() {
               aria-hidden="true"
               className="h-5 w-auto object-contain"
             />
-            <span>Loading…</span>
+            <span>Loading {APP_NAME}…</span>
           </div>
         </div>
       )}

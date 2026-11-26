@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type CSSProperties } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -13,155 +13,106 @@ export type LoaderHelixProps = {
 
 export function LoaderHelix({
   dots = 12,
-  speed = 2,
+  speed = 1.6,
   variant = "dna",
   className,
 }: LoaderHelixProps) {
-  const maxDisplacement = 12;
-  const dotSpacing = 6;
+  const maxDisplacement = 18;
+  const dotSize = 7;
+  const dotSpacing = 8;
   const containerHeight = dots * dotSpacing;
 
   const dotPairs = useMemo(() => {
     return Array.from({ length: dots }, (_, i) => ({
       index: i,
-      delayA: (i / dots) * speed,
-      delayB: (i / dots) * speed + speed / 2,
+      // Negative delays start the full DNA double-helix wave already in motion at t=0
+      delayA: -((i / dots) * speed),
+      delayB: -((i / dots) * speed + speed / 2),
     }));
   }, [dots, speed]);
 
+  const containerStyle = {
+    width: 96,
+    height: containerHeight,
+    "--helix-disp": `${maxDisplacement}px`,
+  } as CSSProperties;
+
   return (
-    <>
-      <style>{`
-        @keyframes helix-strand-a {
-          0% {
-            transform: translateX(0px) scale(0.6);
-            opacity: 0.3;
-          }
-          25% {
-            transform: translateX(${maxDisplacement}px) scale(1);
-            opacity: 1;
-          }
-          50% {
-            transform: translateX(0px) scale(0.6);
-            opacity: 0.3;
-          }
-          75% {
-            transform: translateX(-${maxDisplacement}px) scale(1);
-            opacity: 1;
-          }
-          100% {
-            transform: translateX(0px) scale(0.6);
-            opacity: 0.3;
-          }
-        }
+    <output
+      data-slot="loader-helix"
+      aria-live="polite"
+      aria-label="Loading"
+      className={cn("relative inline-flex flex-col items-center justify-center", className)}
+      style={containerStyle}
+    >
+      <span className="sr-only">Loading</span>
 
-        @keyframes helix-rung-fade {
-          0%, 50%, 100% { opacity: 0.1; }
-          25%, 75% { opacity: 0.3; }
-        }
-
-        @keyframes helix-ribbon-gradient {
-          0% {
-            transform: translateX(0px) scale(0.6);
-            opacity: 0.2;
-          }
-          25% {
-            transform: translateX(${maxDisplacement}px) scale(1);
-            opacity: 1;
-          }
-          50% {
-            transform: translateX(0px) scale(0.6);
-            opacity: 0.4;
-          }
-          75% {
-            transform: translateX(-${maxDisplacement}px) scale(1);
-            opacity: 0.8;
-          }
-          100% {
-            transform: translateX(0px) scale(0.6);
-            opacity: 0.2;
-          }
-        }
-      `}</style>
-      <output
-        data-slot="loader-helix"
-        aria-live="polite"
-        aria-label="Loading"
-        className={cn("relative inline-flex flex-col items-center", className)}
-        style={{
-          width: 80,
-          height: containerHeight,
-          gap: dotSpacing,
-        }}
-      >
-        <span className="sr-only">Loading</span>
-
-        {variant === "ribbon" ? (
-          <div className="relative w-full h-full flex flex-col justify-around items-center">
-            {dotPairs.map((pair) => {
-              const gradientOpacity = 0.3 + (pair.index / dots) * 0.7;
-              return (
-                <div
-                  key={pair.index}
-                  className="absolute left-1/2 rounded-full bg-accent will-change-transform"
-                  style={{
-                    width: 5,
-                    height: 5,
-                    top: pair.index * dotSpacing,
-                    animation: `helix-ribbon-gradient ${speed}s ease-in-out infinite`,
-                    animationDelay: `${pair.delayA}s`,
-                    opacity: gradientOpacity,
-                  }}
-                />
-              );
-            })}
-          </div>
-        ) : (
-          <div className="relative w-full h-full flex flex-col justify-around">
-            {dotPairs.map((pair) => (
+      {variant === "ribbon" ? (
+        <div className="relative h-full w-full flex flex-col justify-around items-center">
+          {dotPairs.map((pair) => {
+            const gradientOpacity = 0.35 + (pair.index / dots) * 0.65;
+            return (
               <div
                 key={pair.index}
-                className="relative w-full flex items-center justify-center"
-                style={{ height: dotSpacing }}
-              >
-                <div
-                  className="absolute rounded-full bg-accent will-change-transform"
+                className="absolute rounded-full bg-accent will-change-transform"
+                style={{
+                  width: dotSize,
+                  height: dotSize,
+                  left: `calc(50% - ${dotSize / 2}px)`,
+                  top: pair.index * dotSpacing,
+                  animation: `helix-ribbon-gradient ${speed}s ease-in-out infinite`,
+                  animationDelay: `${pair.delayA}s`,
+                  opacity: gradientOpacity,
+                }}
+              />
+            );
+          })}
+        </div>
+      ) : (
+        <div className="relative h-full w-full flex flex-col justify-around">
+          {dotPairs.map((pair) => (
+            <div
+              key={pair.index}
+              className="relative w-full flex items-center justify-center"
+              style={{ height: dotSpacing }}
+            >
+              {variant === "dna" && (
+                <span
+                  className="absolute h-[1.5px] bg-accent/35 will-change-transform"
                   style={{
-                    width: 5,
-                    height: 5,
-                    left: "calc(50% - 12px)",
-                    animation: `helix-strand-a ${speed}s ease-in-out infinite`,
+                    width: maxDisplacement * 2,
+                    animation: `helix-rung-fade ${speed}s ease-in-out infinite`,
                     animationDelay: `${pair.delayA}s`,
                   }}
                 />
+              )}
 
-                <div
-                  className="absolute rounded-full bg-foreground will-change-transform"
-                  style={{
-                    width: 5,
-                    height: 5,
-                    left: "calc(50% - 12px)",
-                    animation: `helix-strand-a ${speed}s ease-in-out infinite`,
-                    animationDelay: `${pair.delayB}s`,
-                  }}
-                />
+              <div
+                className="absolute rounded-full bg-accent will-change-transform"
+                style={{
+                  width: dotSize,
+                  height: dotSize,
+                  left: `calc(50% - ${dotSize / 2}px)`,
+                  animation: `helix-strand-a ${speed}s ease-in-out infinite`,
+                  animationDelay: `${pair.delayA}s`,
+                }}
+              />
 
-                {variant === "dna" && (
-                  <span
-                    className="absolute h-px bg-foreground/20 will-change-transform"
-                    style={{
-                      width: maxDisplacement * 2,
-                      animation: `helix-rung-fade ${speed}s ease-in-out infinite`,
-                      animationDelay: `${pair.delayA}s`,
-                    }}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </output>
-    </>
+              <div
+                className="absolute rounded-full bg-foreground will-change-transform"
+                style={{
+                  width: dotSize,
+                  height: dotSize,
+                  left: `calc(50% - ${dotSize / 2}px)`,
+                  animation: `helix-strand-a ${speed}s ease-in-out infinite`,
+                  animationDelay: `${pair.delayB}s`,
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </output>
   );
 }
 
