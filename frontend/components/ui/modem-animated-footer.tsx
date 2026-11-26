@@ -17,6 +17,7 @@ interface FooterProps {
   contactEmail?: string;
   navLinks?: FooterLink[];
   rightNotice?: string;
+  disclaimerNotice?: string;
   brandIcon?: React.ReactNode;
   brandIconContainerClassName?: string;
   className?: string;
@@ -29,6 +30,7 @@ export const Footer = ({
   contactEmail,
   navLinks = [],
   rightNotice,
+  disclaimerNotice,
   brandIcon,
   brandIconContainerClassName,
   className,
@@ -83,16 +85,23 @@ export const Footer = ({
             </div>
           </div>
 
-          <div className="relative z-20 mt-24 flex flex-col items-center justify-center gap-2 px-2 sm:px-4 md:flex-row md:items-center md:justify-between md:gap-1 md:px-0">
-            <p
-              suppressHydrationWarning
-              className="text-center text-sm text-muted-foreground sm:text-base md:text-left"
-            >
-              © {currentYear} {brandName}. All rights reserved.
-            </p>
-            {rightNotice && (
-              <p className="text-center text-xs text-muted-foreground sm:text-sm md:text-right">
-                {rightNotice}
+          <div className="relative z-20 mt-24 flex flex-col gap-2 px-2 sm:px-4 md:px-0">
+            <div className="flex flex-col items-center justify-center gap-2 md:flex-row md:items-center md:justify-between md:gap-1">
+              <p
+                suppressHydrationWarning
+                className="text-center text-sm text-muted-foreground sm:text-base md:text-left"
+              >
+                © {currentYear} {brandName}. All rights reserved.
+              </p>
+              {rightNotice && (
+                <p className="text-center text-xs text-muted-foreground sm:text-sm md:text-right">
+                  {rightNotice}
+                </p>
+              )}
+            </div>
+            {disclaimerNotice && (
+              <p className="text-center text-xs text-muted-foreground md:text-left">
+                {disclaimerNotice}
               </p>
             )}
           </div>

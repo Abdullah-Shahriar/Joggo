@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, FileCheck2, Lock, ShieldCheck } from "lucide-react";
+import { ArrowLeft, FileCheck2, Lock, ShieldPlus } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -8,7 +8,7 @@ import { Logo } from "@/components/ui/Logo";
 
 const TRUST_SIGNALS = [
   {
-    icon: ShieldCheck,
+    icon: ShieldPlus,
     title: "Automatic privacy protection",
     detail: "Names, phone numbers and addresses are removed, double-checked, and approved by you before anything is sent to an AI service.",
   },
@@ -113,7 +113,7 @@ export function AuthSplitShell({ children }: { children: ReactNode }) {
                 return (
                   <li key={item.title} className="flex items-start gap-3">
                     <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded bg-accent-tint text-accent">
-                      <Icon className="h-4 w-4" aria-hidden="true" />
+                      <Icon className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
                     </span>
                     <div>
                       <p className="text-sm font-semibold text-text">{item.title}</p>

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import { AlertCircle, EyeOff, FileWarning, ShieldAlert } from "lucide-react";
+import { AlertCircle, EyeOff, FileWarning, ShieldAlert, ShieldPlus } from "lucide-react";
 import Link from "next/link";
 
 import { PublicLayout } from "@/components/layout/PublicLayout";
+import { TokenChip } from "@/components/ui/TokenChip";
 import { APP_NAME } from "@/lib/constants";
 
 export const metadata: Metadata = {
@@ -92,39 +93,71 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Subtle flat illustration */}
+          {/* Flat overlapping clinical chart cards */}
           <div className="mx-auto w-full max-w-[420px] lg:col-span-5 lg:max-w-none" aria-hidden="true">
-            <svg viewBox="0 0 380 260" className="w-full" fill="none">
-              <rect x="20" y="20" width="140" height="190" rx="6" fill="#FFFFFF" stroke="#E5E7EB" strokeWidth="1.5" />
-              <rect x="36" y="42" width="68" height="8" rx="3" fill="#111827" />
-              <rect x="36" y="62" width="96" height="8" rx="3" fill="#E6F4F1" />
-              <rect x="36" y="80" width="84" height="6" rx="3" fill="#E5E7EB" />
-              <rect x="36" y="96" width="104" height="6" rx="3" fill="#E5E7EB" />
-              <rect x="36" y="114" width="76" height="8" rx="3" fill="#E6F4F1" />
-              <rect x="36" y="134" width="96" height="6" rx="3" fill="#E5E7EB" />
-              <rect x="36" y="150" width="88" height="6" rx="3" fill="#E5E7EB" />
+            <div className="w-full">
+              {/* Back card: Original admission form */}
+              <div className="w-[84%] rounded-[8px] border border-border bg-bg px-4 pb-8 pt-3.5 sm:w-[82%]">
+                <div className="flex items-center justify-between gap-2 border-b-2 border-border pb-2">
+                  <span className="text-[13px] font-medium text-text">Admission form</span>
+                  <span className="font-mono text-[11px] font-medium tracking-wide text-text-muted">
+                    WARD 4
+                  </span>
+                </div>
+                <dl className="mt-2.5 space-y-1.5 text-[13px] leading-snug">
+                  <div className="flex items-baseline gap-3">
+                    <dt className="w-10 shrink-0 text-text-muted">Name</dt>
+                    <dd className="text-text">Rahim Uddin</dd>
+                  </div>
+                  <div className="flex items-baseline gap-3">
+                    <dt className="w-10 shrink-0 text-text-muted">DOB</dt>
+                    <dd className="text-text">03.05.1968</dd>
+                  </div>
+                  <div className="flex items-baseline gap-3">
+                    <dt className="w-10 shrink-0 text-text-muted">MRN</dt>
+                    <dd className="text-text">HN-55821</dd>
+                  </div>
+                  <div className="flex items-baseline gap-3">
+                    <dt className="w-10 shrink-0 text-text-muted">Dx</dt>
+                    <dd className="text-text">Pneumonia</dd>
+                  </div>
+                </dl>
+              </div>
 
-              <path d="M170 115h40" stroke="#0F766E" strokeWidth="2" strokeLinecap="round" />
-              <path d="M202 109l8 6-8 6" stroke="#0F766E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-
-              <rect x="220" y="34" width="140" height="190" rx="6" fill="#F7F8F9" stroke="#E5E7EB" strokeWidth="1.5" />
-              <rect x="236" y="56" width="88" height="14" rx="4" fill="#E6F4F1" />
-              <text x="243" y="66" fill="#0F766E" fontSize="9" fontFamily="sans-serif" fontWeight="600">
-                [PATIENT_A]
-              </text>
-              <rect x="236" y="82" width="54" height="14" rx="4" fill="#E6F4F1" />
-              <text x="243" y="92" fill="#0F766E" fontSize="9" fontFamily="sans-serif" fontWeight="600">
-                Age 58
-              </text>
-              <rect x="296" y="82" width="50" height="14" rx="4" fill="#E6F4F1" />
-              <text x="302" y="92" fill="#0F766E" fontSize="9" fontFamily="sans-serif" fontWeight="600">
-                [DAY_0]
-              </text>
-              <rect x="236" y="112" width="104" height="6" rx="3" fill="#E5E7EB" />
-              <rect x="236" y="128" width="92" height="6" rx="3" fill="#E5E7EB" />
-              <rect x="236" y="144" width="98" height="6" rx="3" fill="#E5E7EB" />
-              <rect x="236" y="160" width="76" height="6" rx="3" fill="#E5E7EB" />
-            </svg>
+              {/* Front card: De-identified record sent to AI */}
+              <div className="relative z-10 -mt-5 ml-auto w-[84%] rounded-[8px] border border-accent bg-bg px-4 py-3.5 sm:w-[82%]">
+                <div className="flex items-center justify-between gap-2 border-b-2 border-accent pb-2">
+                  <span className="text-[13px] font-medium text-text">Sent to AI</span>
+                  <span className="font-mono text-[11px] font-medium tracking-wide text-accent">
+                    CLEAN
+                  </span>
+                </div>
+                <dl className="mt-2.5 space-y-1.5 text-[13px] leading-snug">
+                  <div className="flex items-center gap-3">
+                    <dt className="w-10 shrink-0 text-text-muted">Name</dt>
+                    <dd>
+                      <TokenChip>[PATIENT_A]</TokenChip>
+                    </dd>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <dt className="w-10 shrink-0 text-text-muted">DOB</dt>
+                    <dd>
+                      <TokenChip>Age 58</TokenChip>
+                    </dd>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <dt className="w-10 shrink-0 text-text-muted">MRN</dt>
+                    <dd>
+                      <TokenChip>[MRN_1]</TokenChip>
+                    </dd>
+                  </div>
+                  <div className="flex items-baseline gap-3">
+                    <dt className="w-10 shrink-0 text-text-muted">Dx</dt>
+                    <dd className="text-text">Pneumonia</dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -196,7 +229,10 @@ export default function LandingPage() {
       {/* Band 4: Why it is safe (bg-subtle) */}
       <section className="border-y border-border bg-bg-subtle py-14 sm:py-16">
         <div className="mx-auto max-w-prose px-4 sm:px-6">
-          <h2 className="text-2xl font-semibold text-text">Why it is safe</h2>
+          <h2 className="flex items-center gap-2 text-2xl font-semibold text-text">
+            <ShieldPlus className="h-5 w-5 shrink-0 text-accent" strokeWidth={1.5} aria-hidden="true" />
+            <span>Why it is safe</span>
+          </h2>
           <ul className="mt-6 space-y-3 text-[15px] leading-relaxed text-text">
             {SAFETY_POINTS.map((point) => (
               <li key={point} className="flex items-start gap-3">

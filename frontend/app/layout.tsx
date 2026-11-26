@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { IBM_Plex_Mono, Inter } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { RouteProgressBar } from "@/components/ui/RouteProgressBar";
@@ -13,6 +13,13 @@ const inter = Inter({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
   variable: "--font-inter",
+  display: "swap",
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-ibm-plex-mono",
   display: "swap",
 });
 
@@ -57,7 +64,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} overflow-x-clip`}>
+    <html lang="en" className={`${inter.variable} ${ibmPlexMono.variable} overflow-x-clip`}>
       <body className="min-h-screen overflow-x-clip bg-bg font-sans text-text antialiased">
         <AppProviders>
           <RouteProgressBar />

@@ -3,6 +3,7 @@
 import { ArrowUpRight, Check, ClipboardCheck, ExternalLink, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { ReviewConfirmCheckbox } from "@/components/documents/SignOutChecklist";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ApiError, apiRequest, emitToast } from "@/lib/api";
@@ -213,12 +214,12 @@ export function SendToAiButtons({
   return (
     <section
       aria-label="Open privacy-safe text in an external AI chat"
-      className="mt-5 rounded border border-[#D1D5DB] bg-bg p-4 shadow-[0_1px_3px_rgba(17,24,39,0.05)] sm:p-5"
+      className="mt-5 rounded border border-border bg-bg p-4 sm:p-5"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-accent-tint text-accent">
-            <Sparkles className="h-4 w-4" aria-hidden="true" />
+            <Sparkles className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
           </span>
           <div>
             <h2 className="text-sm font-semibold text-text">Continue in your preferred AI chat</h2>
@@ -227,8 +228,8 @@ export function SendToAiButtons({
             </p>
           </div>
         </div>
-        <span className="rounded border border-border bg-bg-subtle px-2 py-0.5 text-[11px] font-medium text-text-muted">
-          Text format · Privacy-safe
+        <span className="rounded border border-border bg-bg-subtle px-2 py-0.5 font-mono text-[11px] font-medium text-text-muted">
+          TEXT · DE-IDENTIFIED
         </span>
       </div>
 
@@ -302,10 +303,10 @@ export function SendToAiButtons({
               disabled={!isReady || isWaiting}
               aria-label={`${item.label} in a new web session`}
               onClick={() => openConfirmModal(item)}
-              className={`group inline-flex h-11 w-full items-center justify-between gap-2.5 rounded-md border px-4 text-sm font-medium shadow-[0_1px_2px_rgba(17,24,39,0.04)] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 ${
+              className={`group inline-flex h-11 w-full items-center justify-between gap-2.5 rounded-md border px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60 ${
                 isThisWaiting
                   ? "border-accent bg-accent-tint text-accent"
-                  : "border-[#D1D5DB] bg-bg text-text hover:border-accent hover:bg-bg-subtle"
+                  : "border-border bg-bg text-text hover:border-accent hover:bg-bg-subtle"
               }`}
             >
               <span className="flex min-w-0 items-center gap-2.5">
@@ -350,15 +351,15 @@ export function SendToAiButtons({
           action is recorded in the audit log.
         </p>
 
-        <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded border border-border bg-bg-subtle p-3 text-sm text-text">
-          <input
-            type="checkbox"
+        <div className="mt-4">
+          <ReviewConfirmCheckbox
+            id="handoff-review-confirm"
+            boxed
             checked={approvedChecked}
-            onChange={(e) => setApprovedChecked(e.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
+            onChange={setApprovedChecked}
+            label="I reviewed the cleaned text and approve sending it"
           />
-          <span>I reviewed the cleaned text and approve sending it</span>
-        </label>
+        </div>
 
         {modalError && (
           <div role="alert" className="mt-3 rounded bg-danger-tint px-3 py-2 text-xs text-danger">

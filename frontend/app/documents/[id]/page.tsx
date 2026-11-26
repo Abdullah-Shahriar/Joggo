@@ -7,9 +7,10 @@ import {
   ArrowRight,
   Check,
   CheckCircle2,
+  ClipboardList,
   Copy,
   Download,
-  FileText,
+  FileHeart,
   HelpCircle,
   Lock,
   Sparkles,
@@ -20,13 +21,16 @@ import { useParams, useRouter } from "next/navigation";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { SendToAiButtons } from "@/components/documents/SendToAiButtons";
+import { SignOutChecklist } from "@/components/documents/SignOutChecklist";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { BrandLoader } from "@/components/ui/BrandLoader";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/Modal";
 import { PaneSkeleton } from "@/components/ui/Skeleton";
 import { DocumentStatusBadge } from "@/components/ui/StatusBadge";
+import { TokenChip } from "@/components/ui/TokenChip";
 import { apiBlob, apiRequest, emitToast } from "@/lib/api";
+import { formatDateTime, formatTaskType } from "@/lib/format";
 import type {
   DocumentDetail,
   DocumentResultResponse,
@@ -66,14 +70,7 @@ function renderTokensInLine(lineText: string) {
     const isToken = TOKEN_SPLIT_RE.test(seg);
     TOKEN_SPLIT_RE.lastIndex = 0;
     if (isToken) {
-      return (
-        <span
-          key={idx}
-          className="inline-block rounded bg-accent-tint px-1.5 py-0.5 text-[13px] font-semibold text-accent"
-        >
-          {seg}
-        </span>
-      );
+      return <TokenChip key={idx}>{seg}</TokenChip>;
     }
     return <Fragment key={idx}>{seg}</Fragment>;
   });
@@ -91,67 +88,66 @@ function renderFormattedOriginal(
   text: string,
   highlights: OriginalTextResponse["highlights"],
 ) {
-  if (!highlights.length) {
-    return text.split("\n").map((line, i) => {
-      const trimmed = line.trim();
-      if (!trimmed) return <div key={i} className="h-3" />;
-      if (isHeadingLine(trimmed)) {
-        return (
-          <h3
-            key={i}
-            className="mt-4 mb-1.5 border-b border-border pb-1 text-sm font-semibold uppercase tracking-wide text-text first:mt-0"
-          >
-            {trimmed.replace(/^#{1,4}\s+/, "")}
-          </h3>
-        );
-      }
-      return (
-        <p key={i} className="mb-1.5 leading-relaxed text-text">
-          {line}
-        </p>
-      );
-    });
-  }
-
   const sorted = [...highlights].sort((a, b) => a.start - b.start);
-  const parts: Array<{ key: string; content: string; highlighted: boolean; token?: string }> = [];
+  const rawLines = text.split("\n");
   let cursor = 0;
 
-  for (const h of sorted) {
-    if (h.start < cursor || h.start >= text.length) continue;
-    const end = Math.min(h.end, text.length);
-    if (h.start > cursor) {
-      parts.push({ key: `t-${cursor}`, content: text.slice(cursor, h.start), highlighted: false });
-    }
-    parts.push({
-      key: `h-${h.start}-${end}`,
-      content: text.slice(h.start, end),
-      highlighted: true,
-      token: h.token,
-    });
-    cursor = end;
-  }
-  if (cursor < text.length) {
-    parts.push({ key: `t-${cursor}`, content: text.slice(cursor), highlighted: false });
-  }
+  return rawLines.map((line, lineIdx) => {
+    const lineStart = cursor;
+    const lineEnd = lineStart + line.length;
+    cursor = lineEnd + 1;
 
-  return (
-    <div className="whitespace-pre-wrap break-words leading-7 text-text">
-      {parts.map((p) =>
-        p.highlighted ? (
+    const trimmed = line.trim();
+    if (!trimmed) {
+      return <div key={lineIdx} className="h-3" />;
+    }
+
+    const lineHighlights = sorted.filter((h) => h.start < lineEnd && h.end > lineStart);
+    const renderLineContent = () => {
+      if (lineHighlights.length === 0) return line;
+      const parts: React.ReactNode[] = [];
+      let pos = 0;
+      lineHighlights.forEach((h, hIdx) => {
+        const relStart = Math.max(pos, h.start - lineStart);
+        const relEnd = Math.min(line.length, h.end - lineStart);
+        if (relEnd <= relStart) return;
+        if (relStart > pos) {
+          parts.push(<Fragment key={`t-${hIdx}-${pos}`}>{line.slice(pos, relStart)}</Fragment>);
+        }
+        parts.push(
           <mark
-            key={p.key}
-            title={`Hidden as ${p.token}`}
-            className="rounded bg-accent-tint px-1 py-0.5 font-medium text-text"
+            key={`h-${h.start}-${relEnd}`}
+            title={`Hidden as ${h.token}`}
+            className="rounded-[2px] bg-accent-tint px-1 py-0.5 font-medium text-text"
           >
-            {p.content}
-          </mark>
-        ) : (
-          <Fragment key={p.key}>{p.content}</Fragment>
-        ),
-      )}
-    </div>
-  );
+            {line.slice(relStart, relEnd)}
+          </mark>,
+        );
+        pos = relEnd;
+      });
+      if (pos < line.length) {
+        parts.push(<Fragment key={`post-${pos}`}>{line.slice(pos)}</Fragment>);
+      }
+      return parts.length > 0 ? parts : line;
+    };
+
+    if (isHeadingLine(trimmed)) {
+      return (
+        <h3
+          key={lineIdx}
+          className="mt-4 mb-2 border-t border-b border-border pt-3 pb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted first:mt-0 first:border-t-0 first:pt-0"
+        >
+          {trimmed.replace(/^#{1,4}\s+/, "")}
+        </h3>
+      );
+    }
+
+    return (
+      <p key={lineIdx} className="mb-1.5 break-words leading-7 text-text">
+        {renderLineContent()}
+      </p>
+    );
+  });
 }
 
 const VALID_MARK_TYPES = new Set<string>(MARK_TYPES.map((m) => m.value));
@@ -216,7 +212,7 @@ function renderLineWithClickableConflicts(
             fIdx,
           );
         }}
-        className="mx-0.5 inline-flex items-center gap-1 rounded border border-danger bg-danger/15 px-1.5 py-0.5 font-semibold text-danger underline decoration-danger/70 decoration-2 underline-offset-2 transition-colors hover:bg-danger hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60"
+        className="mx-0.5 inline-flex items-center gap-1 rounded-[2px] border border-danger/50 bg-danger-tint px-1.5 py-0.5 font-semibold text-danger underline decoration-danger decoration-2 underline-offset-2 transition-colors hover:bg-danger hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60"
       >
         <span>{isFixingThis ? "Fixing…" : problemWord}</span>
       </button>,
@@ -293,7 +289,7 @@ function renderModifiedPdfLines(
                     e.stopPropagation();
                     options.onAutoFixFinding(primaryFinding, primaryFindingIdx);
                   }}
-                  className="inline-flex h-7 items-center gap-1 rounded border border-danger bg-bg px-2 text-[11px] font-semibold text-danger shadow-sm transition-colors hover:bg-danger hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex h-7 items-center gap-1 rounded border border-danger bg-bg px-2 text-[11px] font-semibold text-danger transition-colors hover:bg-danger hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Wand2 className="h-3 w-3" aria-hidden="true" />
                   <span>{isFixingThis ? "Fixing…" : "Auto-fix line"}</span>
@@ -313,9 +309,9 @@ function renderModifiedPdfLines(
       return (
         <div
           key={lineIdx}
-          className="mt-4 mb-1.5 border-b border-border pb-1 text-sm font-semibold uppercase tracking-wide text-text first:mt-0"
+          className="mt-4 mb-2 border-t border-b border-border pt-3 pb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted first:mt-0 first:border-t-0 first:pt-0"
         >
-          {renderTokensInLine(line)}
+          {renderTokensInLine(trimmed.replace(/^#{1,4}\s+/, ""))}
         </div>
       );
     }
@@ -442,6 +438,7 @@ function DocumentReviewContent() {
   const cleanedRef = useRef<HTMLDivElement>(null);
   const [selectedText, setSelectedText] = useState<string>("");
   const [markType, setMarkType] = useState<string>("PATIENT");
+  const [reviewedChecked, setReviewedChecked] = useState(false);
 
   const { data: doc, isLoading, isError, refetch } = useQuery<DocumentDetail>({
     queryKey: ["document", docId],
@@ -535,6 +532,7 @@ function DocumentReviewContent() {
     onSuccess: async (res) => {
       setSelectedText("");
       setActiveFindingIdx(null);
+      setReviewedChecked(false);
       if (res?.document) {
         queryClient.setQueryData(["document", docId], res.document);
       }
@@ -744,7 +742,7 @@ function DocumentReviewContent() {
       if (!finalCheck.findings || finalCheck.findings.length === 0) {
         emitToast({
           kind: "success",
-          message: `Resolved all conflicts automatically (${fixedCount} step${fixedCount === 1 ? "" : "s"}). Ready to approve and generate!`,
+          message: `Resolved all conflicts automatically (${fixedCount} step${fixedCount === 1 ? "" : "s"}). Review the cleaned text and tick the sign-out checklist to generate.`,
         });
       } else if (fixedCount > 0) {
         emitToast({
@@ -834,6 +832,10 @@ function DocumentReviewContent() {
     }
   };
 
+  useEffect(() => {
+    setReviewedChecked(false);
+  }, [doc?.version, doc?.sanitized_sha256]);
+
   const { currentStageIdx, stageError } = useMemo(() => {
     if (!doc) return { currentStageIdx: 0, stageError: false };
     if (doc.status === "COMPLETED") return { currentStageIdx: 6, stageError: false };
@@ -864,6 +866,9 @@ function DocumentReviewContent() {
   const findings = sanitizedData?.findings || [];
   const hasSafetyIssues = findings.length > 0;
   const safetyPass = doc.safety_report?.status === "PASS";
+  const identifiersReplaced =
+    doc.steps.some((s) => s.step === "TOKENIZE" && s.status === "succeeded") ||
+    Boolean(sanitizedData?.sanitized_text);
   const llmStepError = doc.steps.find((s) => s.step === "LLM_CALL")?.error_message || null;
   const vaultExpiredBeforeApproval =
     doc.vault_expired && ["BLOCKED", "REVIEW_REQUIRED", "APPROVED", "FAILED"].includes(doc.status);
@@ -872,6 +877,19 @@ function DocumentReviewContent() {
     !vaultExpiredBeforeApproval &&
     (doc.status === "REVIEW_REQUIRED" || doc.status === "APPROVED") &&
     Boolean(doc.sanitized_sha256 || sanitizedData?.sanitized_sha256);
+  const canReviewCleaned = canApproveAndSend && identifiersReplaced && safetyPass;
+  const canGenerate = canReviewCleaned && reviewedChecked;
+
+  const findingLineSummary = findings
+    .map((f) => {
+      const textBefore = (sanitizedData?.sanitized_text || "").slice(0, Math.max(0, f.start));
+      const lineNum = textBefore ? textBefore.split("\n").length : 1;
+      const word = (f.snippet || "").trim() || f.type;
+      return `"${word}" (line ${lineNum})`;
+    })
+    .join(" · ");
+
+  const shortDocId = doc.id.slice(0, 8).toUpperCase();
 
   const currentStageLabel =
     currentStageIdx < TRACKER_STAGES.length ? TRACKER_STAGES[currentStageIdx].label : "Complete";
@@ -881,15 +899,26 @@ function DocumentReviewContent() {
   return (
     <div>
       {/* Header row */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold text-text">{doc.original_filename}</h1>
-          <DocumentStatusBadge status={doc.status} />
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-text-muted">
+            <ClipboardList className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.5} aria-hidden="true" />
+            <span>{formatTaskType(doc.task_type)}</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="break-words text-2xl font-semibold text-text">{doc.original_filename}</h1>
+            <DocumentStatusBadge status={doc.status} />
+          </div>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => setShowWhy((v) => !v)}>
-          <HelpCircle className="h-4 w-4" aria-hidden="true" />
-          Why was this hidden?
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="font-mono text-xs text-text-muted">
+            DOC {shortDocId} · {formatDateTime(doc.created_at)}
+          </span>
+          <Button variant="secondary" size="sm" onClick={() => setShowWhy((v) => !v)}>
+            <HelpCircle className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+            Why was this hidden?
+          </Button>
+        </div>
       </div>
 
       {/* High-visibility Step Progression Indicator */}
@@ -1008,34 +1037,37 @@ function DocumentReviewContent() {
               {canApproveAndSend && (
                 <Button
                   size="sm"
+                  disabled={!canGenerate}
                   loading={approveAndSendMutation.isPending}
                   onClick={() => approveAndSendMutation.mutate()}
                 >
                   <span>Approve and generate</span>
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  <ArrowRight className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
                 </Button>
               )}
             </div>
           ) : (
             <div
               role="alert"
-              className="rounded border-2 border-danger bg-danger-tint p-4 text-[15px] text-danger"
+              className="rounded-none border border-danger/30 border-l-4 border-l-danger bg-danger-tint p-4 text-[15px] text-danger"
             >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded bg-danger px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-white">
-                      <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
-                      Verdict: Manual resolution required
-                    </span>
-                    <span className="text-sm font-semibold text-danger">
-                      {findings.length} conflict{findings.length === 1 ? "" : "s"} remaining
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle
+                      className="h-4 w-4 shrink-0 text-danger"
+                      strokeWidth={1.5}
+                      aria-hidden="true"
+                    />
+                    <span className="text-sm font-bold text-danger">
+                      Hold: {findings.length} {findings.length === 1 ? "identifier" : "identifiers"} still visible
                     </span>
                   </div>
-                  <p className="text-sm text-danger/90">
-                    Click any highlighted problem word in the document, click a conflict box below
-                    to resolve it automatically, or click Auto-fix all.
-                  </p>
+                  {findingLineSummary && (
+                    <p className="break-words text-xs text-text-muted">
+                      {findingLineSummary}
+                    </p>
+                  )}
                 </div>
 
                 {hasSafetyIssues && (
@@ -1046,9 +1078,9 @@ function DocumentReviewContent() {
                         loading={autoFixingAll}
                         disabled={fixingFindingIdx !== null && !autoFixingAll}
                         onClick={() => void handleAutoFixAll()}
-                        className="h-10 px-4"
+                        className="h-9 px-3.5"
                       >
-                        <Sparkles className="h-4 w-4" aria-hidden="true" />
+                        <Sparkles className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
                         {autoFixingAll && autoFixProgress
                           ? `Resolving ${autoFixProgress.done}/${autoFixProgress.total}…`
                           : `Auto-fix all (${findings.length})`}
@@ -1058,9 +1090,9 @@ function DocumentReviewContent() {
                     <button
                       type="button"
                       onClick={handleCycleJump}
-                      className="inline-flex h-10 items-center gap-2 rounded border-2 border-danger bg-bg px-4 text-sm font-semibold text-danger shadow-sm hover:bg-danger hover:text-white"
+                      className="inline-flex h-9 items-center gap-2 rounded border border-danger bg-bg px-3.5 text-sm font-semibold text-danger hover:bg-danger hover:text-white"
                     >
-                      <ArrowDownCircle className="h-4 w-4" aria-hidden="true" />
+                      <ArrowDownCircle className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
                       <span>
                         Jump to red issue{" "}
                         {activeFindingIdx !== null
@@ -1093,21 +1125,21 @@ function DocumentReviewContent() {
                           disabled={!canFixItem || autoFixingAll || fixingFindingIdx !== null}
                           aria-label={`Resolve conflict ${f.type}: ${f.snippet || f.reason}`}
                           onClick={() => void handleAutoFixLine(f, i)}
-                          className="group flex flex-1 flex-wrap items-center justify-between gap-2 rounded border border-danger/40 bg-bg px-3 py-2 text-left text-sm text-text shadow-[0_1px_2px_rgba(185,28,28,0.08)] transition-all hover:border-danger hover:bg-danger/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger disabled:cursor-not-allowed disabled:opacity-60"
+                          className="group flex flex-1 flex-wrap items-center justify-between gap-2 rounded border border-danger/40 bg-bg px-3 py-2 text-left text-sm text-text transition-colors hover:border-danger hover:bg-danger-tint/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <div className="min-w-0 flex-1">
-                            <span className="inline-block rounded bg-danger-tint px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-danger">
+                            <span className="inline-block rounded-[2px] bg-danger-tint px-1.5 py-0.5 font-mono text-[11px] font-medium uppercase tracking-wide text-danger">
                               {f.type}
                             </span>
                             {f.snippet && (
-                              <span className="ml-2 rounded border border-danger/30 bg-danger/10 px-1.5 py-0.5 font-semibold text-danger">
+                              <span className="ml-2 rounded-[2px] border border-danger/40 bg-danger-tint px-1.5 py-0.5 font-semibold text-danger underline decoration-danger">
                                 &ldquo;{f.snippet}&rdquo;
                               </span>
                             )}
                             <span className="ml-2 text-xs text-text-muted">{f.reason}</span>
                           </div>
                           <span className="inline-flex shrink-0 items-center gap-1 rounded bg-accent-tint px-2.5 py-1 text-xs font-semibold text-accent transition-colors group-hover:bg-accent group-hover:text-white">
-                            <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
+                            <Wand2 className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
                             <span>{isFixingThis ? "Resolving…" : "Click box to resolve"}</span>
                           </span>
                         </button>
@@ -1191,62 +1223,60 @@ function DocumentReviewContent() {
         ))}
       </div>
 
-      {/* 50/50 PDF-Style Document Split View: Left = Modified/Cleaned PDF sheet, Right = Original PDF sheet */}
+      {/* 50/50 Clinical Chart Sheet Split View: Left = Cleaned record, Right = Original record */}
       <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
-        {/* Left 50%: Modified / Cleaned PDF sheet (highlight-to-hide enabled, clipboard copy blocked) */}
+        {/* Left 50%: Cleaned record clinical chart sheet */}
         <section
-          aria-label="Cleaned document preview"
+          aria-label="Cleaned record"
           onCopy={blockProtectedCopy}
           onCut={blockProtectedCopy}
           onContextMenu={blockProtectedCopy}
           onDragStart={(e) => e.preventDefault()}
           onKeyDown={(e) => blockProtectedShortcut(e, false)}
-          className={`flex h-[480px] flex-col overflow-hidden rounded border bg-[#EAEDF1] sm:h-[580px] lg:h-[640px] ${
-            hasSafetyIssues ? "border-danger" : "border-[#D1D5DB]"
+          className={`flex h-[480px] flex-col overflow-hidden rounded border bg-bg-subtle sm:h-[580px] lg:h-[640px] ${
+            hasSafetyIssues ? "border-danger" : "border-border"
           } ${mobileTab === "cleaned" ? "flex" : "hidden lg:flex"}`}
         >
-          {/* PDF Toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#D1D5DB] bg-bg px-3 py-2.5 sm:px-4">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-accent-tint text-accent">
-                <FileText className="h-4 w-4" aria-hidden="true" />
+          {/* Clinical Chart-Sheet Header */}
+          <div className="bg-bg px-4 pt-3 pb-2.5 border-b-2 border-accent">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-text">Cleaned record</h2>
+              <span className="font-mono text-[11px] font-medium tracking-wider text-accent">
+                DE-IDENTIFIED
               </span>
-              <div>
-                <h2 className="text-xs font-semibold text-text">
-                  Cleaned document (Modified)
-                </h2>
-                <p className="text-[11px] text-text-muted">
-                  Highlight any word to hide it · Copying disabled
-                </p>
-              </div>
             </div>
-            {hasSafetyIssues ? (
-              <div className="flex flex-wrap items-center gap-1.5">
-                {!doc.vault_expired && (
-                  <Button
-                    size="sm"
-                    loading={autoFixingAll}
-                    disabled={fixingFindingIdx !== null && !autoFixingAll}
-                    onClick={() => void handleAutoFixAll()}
+            <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] text-text-muted">
+                Highlight any word to hide it · Copying disabled
+              </p>
+              {hasSafetyIssues ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {!doc.vault_expired && (
+                    <Button
+                      size="sm"
+                      loading={autoFixingAll}
+                      disabled={fixingFindingIdx !== null && !autoFixingAll}
+                      onClick={() => void handleAutoFixAll()}
+                    >
+                      <Sparkles className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+                      {autoFixingAll ? "Fixing…" : "Auto-fix all"}
+                    </Button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleCycleJump}
+                    className="inline-flex h-8 items-center gap-1.5 rounded border border-danger bg-bg px-2.5 text-xs font-semibold text-danger hover:bg-danger hover:text-white"
                   >
-                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                    {autoFixingAll ? "Fixing…" : "Auto-fix all"}
-                  </Button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleCycleJump}
-                  className="inline-flex h-8 items-center gap-1.5 rounded border-2 border-danger bg-bg px-3 text-xs font-semibold text-danger hover:bg-danger hover:text-white"
-                >
-                  <ArrowDownCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Jump ({findings.length})</span>
-                </button>
-              </div>
-            ) : (
-              <span className="rounded border border-border bg-bg-subtle px-2 py-0.5 text-[11px] font-medium text-text-muted">
-                {doc.page_count} {doc.page_count === 1 ? "page" : "pages"}
-              </span>
-            )}
+                    <ArrowDownCircle className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+                    <span>Jump ({findings.length})</span>
+                  </button>
+                </div>
+              ) : (
+                <span className="font-mono text-[11px] text-text-muted">
+                  {doc.page_count} {doc.page_count === 1 ? "PAGE" : "PAGES"}
+                </span>
+              )}
+            </div>
           </div>
 
           {selectedText && (
@@ -1276,109 +1306,115 @@ function DocumentReviewContent() {
             </div>
           )}
 
-          {/* PDF Viewer Canvas + White Paper Sheet */}
+          {/* Clinical Chart Sheet Canvas */}
           <div className="flex-1 overflow-y-auto p-3 sm:p-5">
             <div
               ref={cleanedRef}
               onMouseUp={handleCleanedMouseUp}
-              className="mx-auto min-h-full w-full rounded-[2px] border border-[#D1D5DB] bg-white px-4 py-5 text-[15px] text-text shadow-[0_2px_10px_rgba(17,24,39,0.08)] sm:px-8 sm:py-7"
+              className="relative mx-auto min-h-full w-full overflow-hidden rounded-[2px] border border-border bg-bg px-4 py-5 text-[15px] text-text sm:px-7 sm:py-6"
             >
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2.5 text-[11px] text-text-muted">
-                <span className="truncate font-medium text-text">{doc.original_filename}</span>
-                <span className="shrink-0 uppercase tracking-wide text-accent">Privacy-safe copy</span>
+              {/* Faint diagonal DE-IDENTIFIED watermark */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 flex select-none items-center justify-center overflow-hidden print:hidden"
+              >
+                <span className="-rotate-[28deg] whitespace-nowrap font-mono text-3xl font-medium tracking-[0.22em] text-accent opacity-[0.07] sm:text-4xl">
+                  DE-IDENTIFIED
+                </span>
               </div>
-              {sanLoading ? (
-                <PaneSkeleton />
-              ) : sanitizedData ? (
-                <div className="break-words font-sans">
-                  {renderModifiedPdfLines(sanitizedData.sanitized_text, findings, activeFindingIdx, {
-                    canAutoFix:
-                      !doc.vault_expired &&
-                      ["BLOCKED", "REVIEW_REQUIRED", "APPROVED"].includes(doc.status),
-                    fixingIdx: fixingFindingIdx,
-                    fixingAll: autoFixingAll,
-                    onAutoFixFinding: (f, idx) => void handleAutoFixLine(f, idx),
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-text-muted">Cleaned document is not available.</p>
-              )}
+
+              <div className="relative z-10">
+                {sanLoading ? (
+                  <PaneSkeleton />
+                ) : sanitizedData ? (
+                  <div className="break-words font-sans">
+                    {renderModifiedPdfLines(sanitizedData.sanitized_text, findings, activeFindingIdx, {
+                      canAutoFix:
+                        !doc.vault_expired &&
+                        ["BLOCKED", "REVIEW_REQUIRED", "APPROVED"].includes(doc.status),
+                      fixingIdx: fixingFindingIdx,
+                      fixingAll: autoFixingAll,
+                      onAutoFixFinding: (f, idx) => void handleAutoFixLine(f, idx),
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-text-muted">Cleaned record is not available.</p>
+                )}
+              </div>
             </div>
           </div>
         </section>
 
-        {/* Right 50%: Original Document PDF sheet (strictly non-copyable & non-selectable) */}
+        {/* Right 50%: Original record clinical chart sheet (strictly non-copyable & non-selectable) */}
         <section
-          aria-label="Original protected document preview"
+          aria-label="Original record"
           tabIndex={0}
           onCopy={blockProtectedCopy}
           onCut={blockProtectedCopy}
           onContextMenu={blockProtectedCopy}
           onDragStart={(e) => e.preventDefault()}
           onKeyDown={(e) => blockProtectedShortcut(e, true)}
-          className={`cs-no-copy flex h-[480px] flex-col overflow-hidden rounded border border-[#D1D5DB] bg-[#EAEDF1] sm:h-[580px] lg:h-[640px] ${
+          className={`cs-no-copy flex h-[480px] flex-col overflow-hidden rounded border border-border bg-bg-subtle sm:h-[580px] lg:h-[640px] ${
             mobileTab === "original" ? "flex" : "hidden lg:flex"
           }`}
         >
-          {/* PDF Toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#D1D5DB] bg-bg px-3 py-2.5 sm:px-4">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border bg-bg-subtle text-text-muted">
-                <Lock className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
+          {/* Clinical Chart-Sheet Header */}
+          <div className="border-b-2 border-border bg-bg px-4 pt-3 pb-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-1.5 text-sm font-semibold text-text">
+                <Lock className="h-3.5 w-3.5 shrink-0 text-text-muted" strokeWidth={1.5} aria-hidden="true" />
+                <span>Original record</span>
+              </h2>
+              <span className="font-mono text-[11px] font-medium tracking-wider text-text-muted">
+                ON YOUR SCREEN ONLY
               </span>
-              <div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <h2 className="text-xs font-semibold text-text">Original document</h2>
-                  <span className="rounded bg-bg-subtle px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-muted border border-border">
-                    Non-copyable
-                  </span>
-                </div>
-                <p className="text-[11px] text-text-muted">
-                  Protected view · Temporary private memory only
-                </p>
-              </div>
             </div>
-            <div className="flex gap-1 rounded border border-border bg-bg-subtle p-0.5 text-xs">
-              <button
-                type="button"
-                onClick={() => setOriginalTab("text")}
-                className={`rounded px-2.5 py-1 ${
-                  originalTab === "text"
-                    ? "bg-bg font-semibold text-accent shadow-sm"
-                    : "text-text-muted hover:text-text"
-                }`}
-              >
-                Page view
-              </button>
-              <button
-                type="button"
-                onClick={() => setOriginalTab("file")}
-                className={`rounded px-2.5 py-1 ${
-                  originalTab === "file"
-                    ? "bg-bg font-semibold text-accent shadow-sm"
-                    : "text-text-muted hover:text-text"
-                }`}
-              >
-                Original file
-              </button>
+            <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] text-text-muted">
+                Protected view · Non-copyable
+              </p>
+              <div className="flex gap-1 rounded border border-border bg-bg-subtle p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setOriginalTab("text")}
+                  className={`rounded px-2.5 py-0.5 ${
+                    originalTab === "text"
+                      ? "bg-bg font-semibold text-accent"
+                      : "text-text-muted hover:text-text"
+                  }`}
+                >
+                  Page view
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOriginalTab("file")}
+                  className={`rounded px-2.5 py-0.5 ${
+                    originalTab === "file"
+                      ? "bg-bg font-semibold text-accent"
+                      : "text-text-muted hover:text-text"
+                  }`}
+                >
+                  Original file
+                </button>
+              </div>
             </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 sm:p-5">
             {doc.vault_expired ? (
-              <div className="mx-auto flex min-h-full w-full items-center justify-center rounded-[2px] border border-[#D1D5DB] bg-white p-8 text-center shadow-[0_2px_10px_rgba(17,24,39,0.08)]">
+              <div className="mx-auto flex min-h-full w-full items-center justify-center rounded-[2px] border border-border bg-bg p-8 text-center">
                 <p className="max-w-xs text-sm text-text-muted">
                   The server restarted, so original details were cleared. Upload the file again.
                 </p>
               </div>
             ) : originalTab === "file" ? (
               fileLoading ? (
-                <div className="mx-auto min-h-full w-full rounded-[2px] border border-[#D1D5DB] bg-white p-6 shadow-[0_2px_10px_rgba(17,24,39,0.08)]">
+                <div className="mx-auto min-h-full w-full rounded-[2px] border border-border bg-bg p-6">
                   <PaneSkeleton />
                 </div>
               ) : filePreview ? (
                 filePreview.mime.startsWith("image/") ? (
-                  <div className="mx-auto flex min-h-full w-full items-center justify-center rounded-[2px] border border-[#D1D5DB] bg-white p-4 shadow-[0_2px_10px_rgba(17,24,39,0.08)]">
+                  <div className="mx-auto flex min-h-full w-full items-center justify-center rounded-[2px] border border-border bg-bg p-4">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={filePreview.url}
@@ -1391,20 +1427,16 @@ function DocumentReviewContent() {
                   <iframe
                     title="Original protected PDF preview"
                     src={`${filePreview.url}#toolbar=0&navpanes=0`}
-                    className="h-full w-full rounded-[2px] border border-[#D1D5DB] bg-white shadow-[0_2px_10px_rgba(17,24,39,0.08)]"
+                    className="h-full w-full rounded-[2px] border border-border bg-bg"
                   />
                 )
               ) : (
-                <div className="mx-auto flex min-h-full w-full items-center justify-center rounded-[2px] border border-[#D1D5DB] bg-white p-8 text-center shadow-[0_2px_10px_rgba(17,24,39,0.08)]">
+                <div className="mx-auto flex min-h-full w-full items-center justify-center rounded-[2px] border border-border bg-bg p-8 text-center">
                   <p className="text-sm text-text-muted">Original file preview unavailable.</p>
                 </div>
               )
             ) : (
-              <div className="mx-auto min-h-full w-full rounded-[2px] border border-[#D1D5DB] bg-white px-4 py-5 text-[15px] text-text shadow-[0_2px_10px_rgba(17,24,39,0.08)] sm:px-8 sm:py-7">
-                <div className="mb-5 flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2.5 text-[11px] text-text-muted">
-                  <span className="truncate font-medium text-text">{doc.original_filename}</span>
-                  <span className="shrink-0 uppercase tracking-wide">Protected · Copy disabled</span>
-                </div>
+              <div className="mx-auto min-h-full w-full rounded-[2px] border border-border bg-bg px-4 py-5 text-[15px] text-text sm:px-7 sm:py-6">
                 {origLoading ? (
                   <PaneSkeleton />
                 ) : originalData ? (
@@ -1429,19 +1461,22 @@ function DocumentReviewContent() {
         />
       )}
 
-      {/* Dedicated Full-Width Generated Report Sheet below 50/50 split */}
+      {/* Dedicated Full-Width Generated Draft Sheet below 50/50 split */}
       <section
         ref={resultSectionRef}
         aria-label="Generated draft result"
-        className={`mt-6 overflow-hidden rounded border border-[#D1D5DB] bg-[#EAEDF1] ${
+        className={`mt-6 overflow-hidden rounded border border-border bg-bg-subtle ${
           mobileTab === "result" ? "block" : "hidden lg:block"
         }`}
       >
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#D1D5DB] bg-bg px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-bg px-4 py-3">
           <div>
-            <h2 className="text-sm font-semibold text-text">Generated draft</h2>
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-text">
+              <FileHeart className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.5} aria-hidden="true" />
+              <span>Generated draft</span>
+            </h2>
             <p className="text-xs text-text-muted">
-              Only the cleaned page on the left is sent to the AI assistant; real patient details
+              Only the cleaned record on the left is sent to the AI assistant; real patient details
               are restored here on your screen.
             </p>
           </div>
@@ -1506,7 +1541,7 @@ function DocumentReviewContent() {
         </div>
 
         <div className="p-4 sm:p-6">
-          <div className="mx-auto max-w-4xl rounded-[2px] border border-[#D1D5DB] bg-white px-6 py-7 shadow-[0_2px_10px_rgba(17,24,39,0.08)] sm:px-10 sm:py-8">
+          <div className="mx-auto max-w-4xl rounded-[2px] border border-border bg-bg px-6 py-7 sm:px-10 sm:py-8">
             {doc.status === "SENDING" ? (
               <BrandLoader label="Writing clinical draft (Step 6 of 6)…" />
             ) : doc.status === "LLM_FAILED" ? (
@@ -1574,28 +1609,53 @@ function DocumentReviewContent() {
         </div>
       </section>
 
-      {/* Sticky bottom action bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-[#D1D5DB] bg-bg py-2.5 shadow-[0_-2px_8px_rgba(17,24,39,0.08)] sm:py-3">
-        <div className="mx-auto flex max-w-app flex-wrap items-center justify-between gap-2 px-4 sm:gap-3 sm:px-6">
-          <Button
-            variant="destructive"
-            size="sm"
-            className="whitespace-nowrap"
-            loading={deleteMutation.isPending}
-            onClick={() => setConfirmDelete(true)}
-          >
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-            Delete
-          </Button>
+      {/* Sticky bottom action bar with Sign-out checklist */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-bg py-3">
+        <div className="mx-auto flex max-w-app flex-col gap-3 px-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center justify-between gap-3 lg:justify-start">
+            <Button
+              variant="destructive"
+              size="sm"
+              className="whitespace-nowrap"
+              loading={deleteMutation.isPending}
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+              Delete
+            </Button>
 
-          <Button
-            className="whitespace-nowrap"
-            disabled={!canApproveAndSend}
-            loading={approveAndSendMutation.isPending}
-            onClick={() => approveAndSendMutation.mutate()}
-          >
-            Approve and generate
-          </Button>
+            <div className="lg:hidden">
+              <Button
+                className="whitespace-nowrap"
+                disabled={!canGenerate}
+                loading={approveAndSendMutation.isPending}
+                onClick={() => approveAndSendMutation.mutate()}
+              >
+                Approve and generate
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-4 lg:justify-end">
+            <SignOutChecklist
+              identifiersReplaced={identifiersReplaced}
+              safetyPassed={safetyPass}
+              reviewedChecked={reviewedChecked}
+              canReview={canReviewCleaned}
+              onReviewedChange={setReviewedChecked}
+            />
+
+            <div className="hidden lg:block">
+              <Button
+                className="whitespace-nowrap"
+                disabled={!canGenerate}
+                loading={approveAndSendMutation.isPending}
+                onClick={() => approveAndSendMutation.mutate()}
+              >
+                Approve and generate
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1615,7 +1675,7 @@ function DocumentReviewContent() {
 
 export default function DocumentReviewPage() {
   return (
-    <AppLayout allowedRoles={["doctor"]} bottomPaddingClass="pb-20">
+    <AppLayout allowedRoles={["doctor"]} bottomPaddingClass="pb-36 lg:pb-24">
       <DocumentReviewContent />
     </AppLayout>
   );

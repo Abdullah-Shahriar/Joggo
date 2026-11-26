@@ -30,7 +30,7 @@ Stack: Next.js 14 (App Router), TypeScript strict, Tailwind, TanStack Query, rea
 | `danger` | `#B91C1C` | errors, blocked, destructive text |
 | `danger-tint` | `#FEF2F2` | error banner background |
 
-Typography: Inter (`next/font/google`, with system-ui fallback). Sizes: 14px body, 12px small, 16px inputs, 20px h2, 28px h1, 44px landing hero. Weights 400/500/600. Line height 1.5. Max content width 1120px (app), 720px (text pages), 640px (forms).
+Typography: Inter (`next/font/google`, with system-ui fallback) for UI copy, and IBM Plex Mono (`next/font/google`, weights 400/500, Tailwind `font-mono`) strictly for placeholders/tokens, document IDs, and small clinical header codes (e.g. `WARD 4`, `CLEAN`, `DE-IDENTIFIED`, `ON YOUR SCREEN ONLY`). Sizes: 14px body, 12px small, 16px inputs, 20px h2, 28px h1, 44px landing hero. Weights 400/500/600. Line height 1.5. Max content width 1120px (app), 720px (text pages), 640px (forms).
 Spacing scale: 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64. Radius 6px (inputs, buttons), 8px (modals). Shadow: none, except modals `0 8px 24px rgba(0,0,0,.12)`.
 Focus: 2px accent outline with 2px offset on every interactive element.
 
@@ -46,6 +46,11 @@ Focus: 2px accent outline with 2px offset on every interactive element.
 - **Pagination**: "Previous / Next" and "Page X of Y".
 - **Empty state**: one sentence + one action button, centered.
 - **Confirm dialog** for: delete document, restrict user, restore user, sign out other devices.
+- **TokenChip**: monospace 12px (`font-mono`), `#E6F4F1` background, `#0F766E` text, `3px solid #0F766E` left border, `border-radius: 0 4px 4px 0`, `padding: 1px 6px`, `whitespace-nowrap`. Used for all placeholders/tokens in cleaned records and the hero clinical preview.
+- **Clinical chart sheet**: flat 1px-bordered review pane (`#FFFFFF` surface) with a chart-sheet header (title left, mono code right such as `DE-IDENTIFIED` in teal or `ON YOUR SCREEN ONLY` muted, and a 2px divider below: `#0F766E` for Cleaned, `#E5E7EB` for Original), 11px uppercase tracked section labels separated by thin `#E5E7EB` rules, and a faint diagonal `DE-IDENTIFIED` mono watermark (~7% teal opacity, `pointer-events: none`, hidden from screen readers and print) on the Cleaned pane.
+- **Clinical block alert**: square-cornered `#FEF2F2` banner with `4px solid #B91C1C` left border, warning-triangle icon, bold `"Hold: {n} identifiers still visible"` title, a muted line listing detected words with line numbers, and Jump / Auto-fix actions.
+- **Sign-out checklist**: labeled `"Sign-out checklist"` (11px uppercase muted) beside `"Approve and generate"`, showing three items (`Identifiers replaced`, `Safety scan passed`, and interactive checkbox `I reviewed the cleaned text`). Gates `"Approve and generate"` until all three are ticked; resets the review checkbox on untick or any manual mark. The same review-confirmation checkbox pattern is reused in the external AI handoff confirmation modal.
+- **Clinical icons**: `lucide-react` stroke `1.5`, `#0F766E` or `#6B7280` only — `Stethoscope` (doctor areas), `ClipboardList` (documents), `FileHeart` (drafts), `ShieldPlus` (privacy sections), `Activity` (analytics). Used sparingly where an icon already exists or a heading benefits.
 
 ## 4. Layout
 

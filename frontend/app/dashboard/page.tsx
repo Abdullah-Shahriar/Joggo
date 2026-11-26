@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { Stethoscope } from "lucide-react";
 import Link from "next/link";
 
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -57,7 +58,10 @@ function DashboardContent() {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-[28px] font-semibold text-text">Welcome, {firstName}</h1>
+        <h1 className="flex items-center gap-2.5 text-[28px] font-semibold text-text">
+          <Stethoscope className="h-6 w-6 shrink-0 text-accent" strokeWidth={1.5} aria-hidden="true" />
+          <span>Welcome, {firstName}</span>
+        </h1>
         {isRestricted ? (
           <button
             type="button"
@@ -79,21 +83,21 @@ function DashboardContent() {
       {/* Plain row of three figures */}
       <dl className="mt-8 grid grid-cols-1 gap-6 border-y border-border py-6 sm:grid-cols-3">
         <div>
-          <dt className="text-xs text-text-muted">Completed this week</dt>
-          <dd className="mt-1 text-2xl font-semibold text-text">
-            {isLoading ? "—" : (data?.processed_last_7_days ?? 0)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-text-muted">Waiting for your review</dt>
+          <dt className="text-xs text-text-muted">Awaiting review</dt>
           <dd className="mt-1 text-2xl font-semibold text-text">
             {isLoading ? "—" : (data?.waiting_for_review ?? 0)}
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-text-muted">Needs attention</dt>
+          <dt className="text-xs text-text-muted">On hold</dt>
           <dd className="mt-1 text-2xl font-semibold text-text">
             {isLoading ? "—" : (data?.blocked_count ?? 0)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-text-muted">Completed</dt>
+          <dd className="mt-1 text-2xl font-semibold text-text">
+            {isLoading ? "—" : (data?.counts_by_status?.COMPLETED ?? data?.processed_last_7_days ?? 0)}
           </dd>
         </div>
       </dl>

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { ShieldPlus } from "lucide-react";
 
 import { PublicLayout } from "@/components/layout/PublicLayout";
+import { TokenChip } from "@/components/ui/TokenChip";
 import { APP_NAME } from "@/lib/constants";
 
 export const metadata: Metadata = {
@@ -25,15 +27,9 @@ export default function AboutPage() {
           <p className="text-[15px] leading-relaxed text-text">
             You can upload a PDF, an image (PNG, JPG, or SVG), or snap a photo with your camera.{" "}
             {APP_NAME} reads the page privately, swaps personal details for clear labels like{" "}
-            <span className="rounded bg-accent-tint px-1.5 py-0.5 text-sm font-medium text-accent">
-              [PATIENT_A]
-            </span>{" "}
-            and{" "}
-            <span className="rounded bg-accent-tint px-1.5 py-0.5 text-sm font-medium text-accent">
-              Age 58
-            </span>
-            , and lets you review every change before anything is sent. When the draft is ready,
-            the real details are restored only on your screen.
+            <TokenChip>[PATIENT_A]</TokenChip> and <TokenChip>Age 58</TokenChip>, and lets you
+            review every change before anything is sent. When the draft is ready, the real details
+            are restored only on your screen.
           </p>
         </section>
 
@@ -52,7 +48,10 @@ export default function AboutPage() {
         </section>
 
         <section className="mt-10 space-y-3 border-t border-border pt-8">
-          <h2 className="text-xl font-semibold text-text">How your privacy is protected</h2>
+          <h2 className="flex items-center gap-2 text-xl font-semibold text-text">
+            <ShieldPlus className="h-5 w-5 shrink-0 text-accent" strokeWidth={1.5} aria-hidden="true" />
+            <span>How your privacy is protected</span>
+          </h2>
           <p className="text-[15px] leading-relaxed text-text">
             {APP_NAME} reads typed and photographed pages directly on its own private server, finds
             personal details (names, phone numbers, addresses, medical record numbers, and exact

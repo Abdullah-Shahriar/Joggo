@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { Activity } from "lucide-react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ActivityHeatmap } from "@/components/ui/ActivityHeatmap";
@@ -54,7 +55,10 @@ function AdminAnalyticsContent() {
   if (isLoading) {
     return (
       <div>
-        <h1 className="text-[28px] font-semibold text-text">Analytics</h1>
+        <h1 className="flex items-center gap-2.5 text-[28px] font-semibold text-text">
+          <Activity className="h-6 w-6 shrink-0 text-accent" strokeWidth={1.5} aria-hidden="true" />
+          <span>Analytics</span>
+        </h1>
         <div className="mt-8">
           <TableSkeleton rows={6} />
         </div>
@@ -81,7 +85,10 @@ function AdminAnalyticsContent() {
   return (
     <div className="space-y-12">
       <div>
-        <h1 className="text-[28px] font-semibold text-text">Analytics</h1>
+        <h1 className="flex items-center gap-2.5 text-[28px] font-semibold text-text">
+          <Activity className="h-6 w-6 shrink-0 text-accent" strokeWidth={1.5} aria-hidden="true" />
+          <span>Analytics</span>
+        </h1>
         <p className="mt-1.5 text-[15px] text-text-muted">
           General usage numbers only. Document contents and filenames are never shown to
           administrators.

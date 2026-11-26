@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpDown, Trash2 } from "lucide-react";
+import { ArrowUpDown, ClipboardList, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -75,7 +75,10 @@ function DocumentsListContent() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-[28px] font-semibold text-text">My documents</h1>
+        <h1 className="flex items-center gap-2.5 text-[28px] font-semibold text-text">
+          <ClipboardList className="h-6 w-6 shrink-0 text-accent" strokeWidth={1.5} aria-hidden="true" />
+          <span>My documents</span>
+        </h1>
         <Link
           href="/documents/new"
           className="inline-flex h-10 items-center justify-center rounded bg-accent px-4 text-sm font-medium text-white hover:bg-accent-hover"

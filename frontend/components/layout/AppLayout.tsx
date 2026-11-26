@@ -281,6 +281,7 @@ export function AppLayout({
         contactEmail="abdullahshahriar2140@gmail.com"
         navLinks={footerQuickLinks}
         rightNotice="Demo environment — use synthetic data only"
+        disclaimerNotice="Documentation support tool. Not a medical device. Clinician review required."
         brandIconContainerClassName="bg-gradient-to-br from-bg to-accent-tint border border-border/80"
         brandIcon={
           // eslint-disable-next-line @next/next/no-img-element
