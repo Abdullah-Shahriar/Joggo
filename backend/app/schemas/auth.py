@@ -11,9 +11,9 @@ PortalType = Literal["doctor", "admin", "auditor"]
 class SignupRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    email: str = Field(min_length=3, max_length=320)
-    password: str = Field(min_length=1, max_length=256)
-    full_name: str = Field(min_length=2, max_length=80)
+    email: str = Field(max_length=320)
+    password: str = Field(max_length=256)
+    full_name: str = Field(max_length=80)
 
 
 class LoginRequest(BaseModel):

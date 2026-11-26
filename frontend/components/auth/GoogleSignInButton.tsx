@@ -18,7 +18,7 @@ declare global {
           }) => void;
           renderButton: (
             el: HTMLElement,
-            opts: { theme?: string; size?: string; width?: number; text?: string },
+            opts: { theme?: string; size?: string; width?: number; text?: string; locale?: string },
           ) => void;
         };
       };
@@ -118,6 +118,7 @@ export function GoogleSignInButton({
       size: "large",
       width: btnWidth,
       text: mode === "signup" ? "signup_with" : "continue_with",
+      locale: "en",
     });
   }, [clientId, scriptLoaded, portal, mode]);
 
@@ -145,7 +146,7 @@ export function GoogleSignInButton({
   return (
     <>
       <Script
-        src="https://accounts.google.com/gsi/client"
+        src="https://accounts.google.com/gsi/client?hl=en"
         strategy="afterInteractive"
         onLoad={() => setScriptLoaded(true)}
       />

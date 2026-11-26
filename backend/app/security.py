@@ -21,6 +21,7 @@ JWT_ALGORITHM: Final[str] = "HS256"
 
 ACCESS_COOKIE_NAME: Final[str] = "access_token"
 REFRESH_COOKIE_NAME: Final[str] = "refresh_token"
+SESSION_HINT_COOKIE_NAME: Final[str] = "joggo_session"
 
 _password_hasher: Final[PasswordHasher] = PasswordHasher(
     time_cost=2,
@@ -143,6 +144,15 @@ def set_auth_cookies(
         path="/api/auth",
         max_age=REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60,
     )
+    response.set_cookie(
+        key=SESSION_HINT_COOKIE_NAME,
+        value="1",
+        httponly=False,
+        secure=secure,
+        samesite="lax",
+        path="/",
+        max_age=REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60,
+    )
 
 
 def clear_auth_cookies(response: Response, settings: Settings | None = None) -> None:
@@ -159,6 +169,13 @@ def clear_auth_cookies(response: Response, settings: Settings | None = None) -> 
         key=REFRESH_COOKIE_NAME,
         path="/api/auth",
         httponly=True,
+        secure=secure,
+        samesite="lax",
+    )
+    response.delete_cookie(
+        key=SESSION_HINT_COOKIE_NAME,
+        path="/",
+        httponly=False,
         secure=secure,
         samesite="lax",
     )

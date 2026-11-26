@@ -76,8 +76,8 @@ function HelpContent() {
         <p className="mt-1 text-sm text-text-muted">
           Report a bug, account restriction question, or privacy concern. Do not include real
           patient names. You can also email{" "}
-          <a href="mailto:support@joggo.app" className="font-medium text-accent hover:underline">
-            support@joggo.app
+          <a href="mailto:abdullahshahriar2140@gmail.com" className="font-medium text-accent hover:underline">
+            abdullahshahriar2140@gmail.com
           </a>
           .
         </p>

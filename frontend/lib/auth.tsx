@@ -1,10 +1,26 @@
 "use client";
 
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
 import { createContext, useContext, useState, type ReactNode } from "react";
 
 import { apiRequest } from "./api";
 import type { AuthUser } from "./types";
+
+const PUBLIC_PATHS = new Set([
+  "/",
+  "/about",
+  "/faq",
+  "/login",
+  "/signup",
+  "/00admin/00admin",
+  "/00auditor",
+]);
+
+function hasSessionHintCookie(): boolean {
+  if (typeof document === "undefined") return false;
+  return document.cookie.split(";").some((entry) => entry.trim() === "joggo_session=1");
+}
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -18,6 +34,9 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 function AuthStateProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const pathname = usePathname() || "/";
+  const isPublicPath = PUBLIC_PATHS.has(pathname);
+  const shouldFetchSession = !isPublicPath || hasSessionHintCookie();
 
   const { data, isLoading } = useQuery<AuthUser | null>({
     queryKey: ["auth", "me"],
@@ -31,6 +50,7 @@ function AuthStateProvider({ children }: { children: ReactNode }) {
         return null;
       }
     },
+    enabled: shouldFetchSession,
     staleTime: 60_000,
     retry: false,
   });
@@ -51,6 +71,9 @@ function AuthStateProvider({ children }: { children: ReactNode }) {
         silentErrorToast: true,
       });
     } finally {
+      if (typeof document !== "undefined") {
+        document.cookie = "joggo_session=; Path=/; Max-Age=0; SameSite=Lax";
+      }
       queryClient.clear();
       queryClient.setQueryData(["auth", "me"], null);
     }
@@ -60,7 +83,7 @@ function AuthStateProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user: data ?? null,
-        isLoading,
+        isLoading: shouldFetchSession ? isLoading : false,
         refetchUser,
         setUser,
         logout,

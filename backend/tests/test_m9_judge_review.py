@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.models import AuditLog, Document, DocumentStatus, TaskType, User, UserRole, UserStatus
-from app.security import hash_password
+from app.security import GoogleIdentity, SESSION_HINT_COOKIE_NAME, hash_password
 from app.services.detection.resolve import run_detection
 from app.services.safety import run_safety_scan
 from app.services.tokenizer import tokenize_text
@@ -339,3 +339,90 @@ def test_bangla_detection_sweep_safety_and_manual_mark(app: FastAPI) -> None:
         assert "Age 57" in san_after
     finally:
         doc_client.__exit__(None, None, None)
+
+
+def test_session_hint_cookie_lifecycle_and_multifield_validation(app: FastAPI, monkeypatch) -> None:
+    client = TestClient(app, raise_server_exceptions=False)
+    client.__enter__()
+    try:
+        # 1. Multi-field VALIDATION_ERROR lists ALL invalid field names and zero raw values
+        bad_signup = client.post(
+            "/api/auth/signup",
+            json={"email": "not-an-email-secret", "password": "short", "full_name": "x"},
+            headers=CSRF_HEADERS,
+        )
+        assert bad_signup.status_code == 422
+        err = bad_signup.json()["error"]
+        assert err["code"] == "VALIDATION_ERROR"
+        assert err["message"] == "Invalid request input (email, password, full_name)."
+        assert "not-an-email-secret" not in err["message"]
+        assert "short" not in err["message"]
+
+        # 2. Signup sets non-HttpOnly joggo_session=1 hint cookie (Path=/)
+        email = f"hint-{uuid.uuid4().hex[:8]}@example.com"
+        su = client.post(
+            "/api/auth/signup",
+            json={"email": email, "password": "ValidPassword123", "full_name": "Dr Hint Test"},
+            headers=CSRF_HEADERS,
+        )
+        assert su.status_code == 201
+        set_cookies = su.headers.get_list("set-cookie")
+        hint_headers = [h for h in set_cookies if h.startswith(f"{SESSION_HINT_COOKIE_NAME}=")]
+        assert hint_headers, f"Missing {SESSION_HINT_COOKIE_NAME} cookie in {set_cookies}"
+        assert "joggo_session=1" in hint_headers[0]
+        assert "httponly" not in hint_headers[0].lower()
+        assert "path=/" in hint_headers[0].lower()
+
+        # 3. Refresh rotates and keeps joggo_session=1; reuse clears joggo_session
+        old_refresh = client.cookies.get("refresh_token")
+        assert old_refresh
+        ref = client.post("/api/auth/refresh", headers=CSRF_HEADERS)
+        assert ref.status_code == 200
+        assert any("joggo_session=1" in h for h in ref.headers.get_list("set-cookie"))
+
+        # Replay revoked refresh token -> 401 SESSION_REVOKED and clears joggo_session
+        client.cookies.set("refresh_token", old_refresh, path="/api/auth")
+        reused = client.post("/api/auth/refresh", headers=CSRF_HEADERS)
+        assert reused.status_code == 401
+        assert reused.json()["error"]["code"] == "SESSION_REVOKED"
+        cleared_reuse = [h for h in reused.headers.get_list("set-cookie") if h.startswith(f"{SESSION_HINT_COOKIE_NAME}=")]
+        assert cleared_reuse and "max-age=0" in cleared_reuse[0].lower()
+
+        # 4. Login sets joggo_session=1; Logout clears it
+        lg = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "ValidPassword123"},
+            headers=CSRF_HEADERS,
+        )
+        assert lg.status_code == 200
+        assert any("joggo_session=1" in h for h in lg.headers.get_list("set-cookie"))
+
+        lo = client.post("/api/auth/logout", headers=CSRF_HEADERS)
+        assert lo.status_code == 200
+        cleared_logout = [h for h in lo.headers.get_list("set-cookie") if h.startswith(f"{SESSION_HINT_COOKIE_NAME}=")]
+        assert cleared_logout and "max-age=0" in cleared_logout[0].lower()
+
+        # 5. Refresh without cookie clears joggo_session
+        bad_ref = client.post("/api/auth/refresh", headers=CSRF_HEADERS)
+        assert bad_ref.status_code == 401
+        cleared_fail = [h for h in bad_ref.headers.get_list("set-cookie") if h.startswith(f"{SESSION_HINT_COOKIE_NAME}=")]
+        assert cleared_fail and "max-age=0" in cleared_fail[0].lower()
+
+        # 6. Google login sets joggo_session=1
+        monkeypatch.setattr(
+            "app.routers.auth.verify_google_credential",
+            lambda _cred: GoogleIdentity(
+                sub=f"gsub-{uuid.uuid4().hex[:8]}",
+                email=f"google-{uuid.uuid4().hex[:8]}@example.com",
+                full_name="Dr Google Hint",
+            ),
+        )
+        gl = client.post(
+            "/api/auth/google",
+            json={"credential": "synthetic-google-id-token-123456"},
+            headers=CSRF_HEADERS,
+        )
+        assert gl.status_code == 200
+        assert any("joggo_session=1" in h for h in gl.headers.get_list("set-cookie"))
+    finally:
+        client.__exit__(None, None, None)

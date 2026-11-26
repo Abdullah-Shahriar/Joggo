@@ -41,6 +41,7 @@ def test_request_id_echoed_when_valid_and_replaced_when_invalid(client: TestClie
 def test_standard_error_shape_across_status_codes(app: FastAPI, client: TestClient) -> None:
     class SamplePayload(BaseModel):
         count: int
+        code: int
 
     @app.get("/api/_test/unauth")
     def trigger_401() -> None:
@@ -71,7 +72,7 @@ def test_standard_error_shape_across_status_codes(app: FastAPI, client: TestClie
         ("GET", "/api/_test/unauth", None, 401, "UNAUTHENTICATED"),
         ("GET", "/api/_test/forbidden", None, 403, "FORBIDDEN"),
         ("GET", "/api/does-not-exist", None, 404, "NOT_FOUND"),
-        ("POST", "/api/_test/validate", {"count": "Rahim Ahmed secret"}, 422, "VALIDATION_ERROR"),
+        ("POST", "/api/_test/validate", {"count": "Rahim Ahmed secret", "code": "bad-val"}, 422, "VALIDATION_ERROR"),
         ("GET", "/api/_test/ratelimit", None, 429, "RATE_LIMITED"),
         ("GET", "/api/_test/crash", None, 500, "INTERNAL_ERROR"),
     ]
@@ -85,7 +86,11 @@ def test_standard_error_shape_across_status_codes(app: FastAPI, client: TestClie
         assert set(body["error"].keys()) == {"code", "message", "request_id"}
         assert body["error"]["code"] == expected_code
         assert body["error"]["request_id"] == res.headers["x-request-id"]
+        if expected_code == "VALIDATION_ERROR":
+            assert "count" in body["error"]["message"]
+            assert "code" in body["error"]["message"]
         assert "Rahim Ahmed" not in body["error"]["message"]
+        assert "bad-val" not in body["error"]["message"]
         assert "SELECT" not in body["error"]["message"]
         assert "leak@example.com" not in body["error"]["message"]
         assert res.headers["cache-control"] == "no-store"

@@ -69,13 +69,6 @@ def serialize_user(user: User) -> AuthUserResponse:
     )
 
 
-def _normalize_email(raw: str) -> str:
-    email = raw.strip().lower()
-    if not EMAIL_REGEX.match(email):
-        raise AppError(ErrorCode.VALIDATION_ERROR, 422, "Please enter a valid email address.")
-    return email
-
-
 def _create_session_and_set_cookies(
     *,
     db: Session,
@@ -150,16 +143,31 @@ def signup(
     response: Response,
     db: Session = Depends(get_db),
 ) -> AuthSessionResponse:
-    email = _normalize_email(payload.email)
+    email = payload.email.strip().lower()
     full_name = payload.full_name.strip()
-    if len(full_name) < 2:
-        raise AppError(ErrorCode.VALIDATION_ERROR, 422, "Full name must be at least 2 characters.")
+    email_ok = bool(EMAIL_REGEX.match(email))
+    password_ok = validate_password_strength(payload.password)
+    name_ok = len(full_name) >= 2
 
-    if not validate_password_strength(payload.password):
+    if email_ok and name_ok and not password_ok:
         raise AppError(
             ErrorCode.WEAK_PASSWORD,
             422,
             "Password must be at least 10 characters and include a letter and a digit.",
+        )
+
+    invalid_fields: list[str] = []
+    if not email_ok:
+        invalid_fields.append("email")
+    if not password_ok:
+        invalid_fields.append("password")
+    if not name_ok:
+        invalid_fields.append("full_name")
+    if invalid_fields:
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR,
+            422,
+            f"Invalid request input ({', '.join(invalid_fields)}).",
         )
 
     existing = db.execute(select(User.id).where(User.email == email)).scalar_one_or_none()
