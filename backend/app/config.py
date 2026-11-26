@@ -1,6 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -37,6 +38,18 @@ class Settings(BaseSettings):
     AUDITOR_SEED_PASSWORD: str = ""
     DOCTOR_SEED_EMAIL: str = ""
     DOCTOR_SEED_PASSWORD: str = ""
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def _normalize_database_url(cls, value: str) -> str:
+        if not isinstance(value, str):
+            return value
+        trimmed = value.strip()
+        if trimmed.startswith("postgres://"):
+            return "postgresql+psycopg://" + trimmed[len("postgres://") :]
+        if trimmed.startswith("postgresql://"):
+            return "postgresql+psycopg://" + trimmed[len("postgresql://") :]
+        return trimmed
 
     @property
     def llm_providers(self) -> list[str]:
