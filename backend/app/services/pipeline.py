@@ -444,28 +444,64 @@ def apply_manual_mark(
     if len(cleaned) < 2 or len(cleaned) > 200:
         raise AppError(ErrorCode.VALIDATION_ERROR, 422, "Marked text must be between 2 and 200 characters.")
 
-    if TOKEN_PATTERN_RE.search(cleaned):
-        raise AppError(ErrorCode.MARK_OVERLAPS_TOKEN, 422, "Selection cannot overlap an existing placeholder token.")
-
     current_sanitized: str = vault_data.get("sanitized_text") or ""
-    if cleaned.casefold() not in current_sanitized.casefold():
+    original_text: str = vault_data["original_text"]
+
+    # If the selection is purely existing placeholder token(s) (e.g. "[PATIENT_A]"), reject as overlap.
+    # If it mixes an already-replaced token with unmasked text (e.g. "Dr. [DOCTOR_A] Karim"),
+    # strip the token portions and resolve only the remaining unmasked segment(s) cleanly.
+    candidate_segments: list[str]
+    if TOKEN_PATTERN_RE.search(cleaned):
+        stripped_parts = [
+            part.strip(" \t\r\n,.;:()[]{}")
+            for part in TOKEN_PATTERN_RE.split(cleaned)
+        ]
+        candidate_segments = [p for p in stripped_parts if len(p) >= 2]
+        if not candidate_segments:
+            raise AppError(
+                ErrorCode.MARK_OVERLAPS_TOKEN,
+                422,
+                "Selection cannot overlap an existing placeholder token.",
+            )
+    else:
+        candidate_segments = [cleaned]
+
+    def _find_matches_in_text(target_text: str, needle: str) -> list[re.Match[str]]:
+        if any(ch.isdigit() for ch in needle):
+            pat = re.compile(re.escape(needle), re.IGNORECASE)
+            found = list(pat.finditer(target_text))
+        else:
+            pat = re.compile(r"(?i)(?<!\w)" + re.escape(needle) + r"(?!\w)")
+            found = list(pat.finditer(target_text))
+            if not found:
+                # Fallback for terms containing/bounded by punctuation (e.g. "Dr.", "(555)", "O'Brien")
+                found = list(re.compile(re.escape(needle), re.IGNORECASE).finditer(target_text))
+        return found
+
+    matches: list[tuple[int, int]] = []
+    seen_ranges: set[tuple[int, int]] = set()
+    found_in_sanitized = False
+
+    for seg in candidate_segments:
+        if seg.casefold() in current_sanitized.casefold():
+            found_in_sanitized = True
+        for m in _find_matches_in_text(original_text, seg):
+            rng = (m.start(), m.end())
+            if rng not in seen_ranges:
+                seen_ranges.add(rng)
+                matches.append(rng)
+
+    if not found_in_sanitized:
         raise AppError(ErrorCode.MARK_NOT_FOUND, 422, "Selected text was not found in the cleaned document.")
 
-    original_text: str = vault_data["original_text"]
-    if any(ch.isdigit() for ch in cleaned):
-        pat = re.compile(re.escape(cleaned), re.IGNORECASE)
-    else:
-        pat = re.compile(r"(?i)(?<!\w)" + re.escape(cleaned) + r"(?!\w)")
-
-    matches = list(pat.finditer(original_text))
     if not matches:
         raise AppError(ErrorCode.MARK_NOT_FOUND, 422, "Selected text was not found in the original document.")
 
     existing_manual = _deserialize_spans(vault_data.get("manual_spans") or [])
     new_manual_spans = [
         Span(
-            start=m.start(),
-            end=m.end(),
+            start=start,
+            end=end,
             entity_type=entity_type,
             score=1.0,
             detector="manual",
@@ -473,9 +509,15 @@ def apply_manual_mark(
             reason="Manually marked by clinician",
             source="manual",
         )
-        for m in matches
+        for start, end in matches
     ]
-    all_manual = existing_manual + new_manual_spans
+    # Replace any older manual marks overlapped by the new mark so re-marking/updating always succeeds
+    non_overlapping_existing = [
+        old
+        for old in existing_manual
+        if not any(new.start < old.end and new.end > old.start for new in new_manual_spans)
+    ]
+    all_manual = non_overlapping_existing + new_manual_spans
 
     # Re-resolve (existing detected + new manual + sweep), re-tokenize, re-run safety scan
     metadata_hints: list[str] = vault_data.get("metadata_hints") or []

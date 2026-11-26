@@ -115,3 +115,77 @@ def test_export_pdf_png_and_jpg_outputs_are_valid() -> None:
     with Image.open(io.BytesIO(jpg_bytes)) as im_jpg:
         assert im_jpg.format == "JPEG"
         assert im_jpg.width > 400 and im_jpg.height > 400
+
+
+def test_manual_mark_handles_mixed_token_text_punctuation_and_re_marking(app: FastAPI) -> None:
+    import time
+    from scripts.make_sample_pdfs import build_text_lab_report_bytes
+
+    email = _make_user(UserRole.doctor)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        r_login = c.post(
+            "/api/auth/login",
+            json={"email": email, "password": "StrongPass123", "portal": "doctor"},
+            headers=CSRF_HEADERS,
+        )
+        assert r_login.status_code == 200
+
+        up = c.post(
+            "/api/documents",
+            files={"file": ("mark_edge.pdf", build_text_lab_report_bytes(), "application/pdf")},
+            data={"task_type": "discharge_summary"},
+            headers=CSRF_HEADERS,
+        )
+        assert up.status_code == 202
+        doc_id = up.json()["id"]
+
+        detail = {}
+        for _ in range(100):
+            detail = c.get(f"/api/documents/{doc_id}").json()
+            if detail["status"] not in {"UPLOADED", "PROCESSING"}:
+                break
+            time.sleep(0.15)
+        assert detail["status"] in {"REVIEW_REQUIRED", "BLOCKED"}
+
+        san = c.get(f"/api/documents/{doc_id}/sanitized").json()
+        version = san["version"]
+
+        # 1. Mixed selection containing an already-replaced token + unmasked word must NOT fail
+        #    with MARK_OVERLAPS_TOKEN; it strips the token and hides the unmasked word cleanly.
+        r_mixed = c.post(
+            f"/api/documents/{doc_id}/manual-marks",
+            json={"text": "[PATIENT_A] Hematology", "entity_type": "OTHER"},
+            headers={**CSRF_HEADERS, "If-Match": str(version)},
+        )
+        assert r_mixed.status_code == 200
+        assert r_mixed.json()["occurrences"] >= 1
+        version = r_mixed.json()["document"]["version"]
+
+        # 2. Pure token-only selection still returns 422 MARK_OVERLAPS_TOKEN
+        r_pure_tok = c.post(
+            f"/api/documents/{doc_id}/manual-marks",
+            json={"text": "[PATIENT_A]", "entity_type": "PATIENT"},
+            headers={**CSRF_HEADERS, "If-Match": str(version)},
+        )
+        assert r_pure_tok.status_code == 422
+        assert r_pure_tok.json()["error"]["code"] == "MARK_OVERLAPS_TOKEN"
+
+        # 3. Word with punctuation (e.g. "Biochemistry" or "g/dL") resolves cleanly
+        r_punct = c.post(
+            f"/api/documents/{doc_id}/manual-marks",
+            json={"text": "Biochemistry", "entity_type": "OTHER"},
+            headers={**CSRF_HEADERS, "If-Match": str(version)},
+        )
+        assert r_punct.status_code == 200
+        updated_doc = r_punct.json()["document"]
+        assert updated_doc["status"] == "REVIEW_REQUIRED"
+        assert updated_doc["safety_report"]["status"] == "PASS"
+
+        # 4. Proceeding to Approve succeeds cleanly after resolution
+        r_approve = c.post(
+            f"/api/documents/{doc_id}/approve",
+            json={"sanitized_sha256": updated_doc["sanitized_sha256"]},
+            headers=CSRF_HEADERS,
+        )
+        assert r_approve.status_code == 200
+        assert r_approve.json()["status"] == "APPROVED"

@@ -4,7 +4,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowDownCircle,
+  ArrowRight,
   Check,
+  CheckCircle2,
   Copy,
   Download,
   FileText,
@@ -160,6 +162,77 @@ function mapFindingTypeToMarkType(findingType: string): string {
   return "OTHER";
 }
 
+function renderLineWithClickableConflicts(
+  line: string,
+  lineStart: number,
+  matchingFindings: Array<{ f: SafetyFindingView; fIdx: number }>,
+  options: {
+    canAutoFix: boolean;
+    fixingIdx: number | null;
+    fixingAll: boolean;
+    onAutoFixFinding: (finding: SafetyFindingView, findingIdx: number) => void;
+  },
+) {
+  if (!line) return "\u00A0";
+
+  // Sort non-overlapping conflict spans clipped to this line so each problem word is directly clickable
+  const sorted = [...matchingFindings].sort((a, b) => a.f.start - b.f.start);
+  const nodes: React.ReactNode[] = [];
+  let cursor = 0;
+
+  sorted.forEach(({ f, fIdx }, idx) => {
+    const relStart = Math.max(cursor, f.start - lineStart);
+    const relEnd = Math.min(line.length, f.end - lineStart);
+    if (relEnd <= relStart) return;
+
+    if (relStart > cursor) {
+      nodes.push(
+        <Fragment key={`pre-${idx}-${cursor}`}>
+          {renderTokensInLine(line.slice(cursor, relStart))}
+        </Fragment>,
+      );
+    }
+
+    const problemWord = line.slice(relStart, relEnd);
+    const isFixingThis = options.fixingIdx === fIdx;
+    const canClick =
+      options.canAutoFix &&
+      Boolean((f.snippet || problemWord).trim().length >= 2) &&
+      !options.fixingAll &&
+      options.fixingIdx === null;
+
+    nodes.push(
+      <button
+        key={`word-${fIdx}-${relStart}`}
+        type="button"
+        disabled={!canClick}
+        aria-label={`Resolve conflict word "${problemWord}" (${f.type})`}
+        title={`Click to automatically hide "${problemWord}" (${f.type})`}
+        onClick={(e) => {
+          e.stopPropagation();
+          options.onAutoFixFinding(
+            { ...f, snippet: f.snippet || problemWord },
+            fIdx,
+          );
+        }}
+        className="mx-0.5 inline-flex items-center gap-1 rounded border border-danger bg-danger/15 px-1.5 py-0.5 font-semibold text-danger underline decoration-danger/70 decoration-2 underline-offset-2 transition-colors hover:bg-danger hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <span>{isFixingThis ? "Fixing…" : problemWord}</span>
+      </button>,
+    );
+
+    cursor = relEnd;
+  });
+
+  if (cursor < line.length) {
+    nodes.push(
+      <Fragment key={`post-${cursor}`}>{renderTokensInLine(line.slice(cursor))}</Fragment>,
+    );
+  }
+
+  return nodes.length > 0 ? nodes : renderTokensInLine(line);
+}
+
 function renderModifiedPdfLines(
   text: string,
   findings: SafetyFindingView[],
@@ -181,7 +254,7 @@ function renderModifiedPdfLines(
 
     const matchingFindings = findings
       .map((f, fIdx) => ({ f, fIdx }))
-      .filter(({ f }) => f.start <= lineEnd && f.end >= lineStart);
+      .filter(({ f }) => f.start < lineEnd && f.end > lineStart);
     const hasIssue = matchingFindings.length > 0;
     const isActiveJump =
       activeJumpIdx !== null && matchingFindings.some(({ fIdx }) => fIdx === activeJumpIdx);
@@ -204,9 +277,11 @@ function renderModifiedPdfLines(
           }`}
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-medium text-danger">{renderTokensInLine(line || " ")}</span>
+            <span className="font-medium text-danger">
+              {renderLineWithClickableConflicts(line, lineStart, matchingFindings, options)}
+            </span>
             <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-              <span className="rounded bg-bg px-1.5 py-0.5 text-[11px] font-semibold text-danger border border-danger/30">
+              <span className="rounded border border-danger/30 bg-bg px-1.5 py-0.5 text-[11px] font-semibold text-danger">
                 Conflict: {primaryFinding.type}
               </span>
               {canFixLine && (
@@ -435,17 +510,28 @@ function DocumentReviewContent() {
   const markMutation = useMutation({
     mutationFn: async () => {
       if (!doc || !selectedText) return;
-      return apiRequest(`/documents/${docId}/manual-marks`, {
-        method: "POST",
-        headers: { "If-Match": String(doc.version) },
-        body: { text: selectedText, entity_type: markType },
-      });
+      const freshSan = await apiRequest<SanitizedTextResponse>(`/documents/${docId}/sanitized`, {
+        silentErrorToast: true,
+      }).catch(() => null);
+      const latestVersion = freshSan?.version ?? doc.version;
+      return apiRequest<{ document: DocumentDetail; occurrences: number }>(
+        `/documents/${docId}/manual-marks`,
+        {
+          method: "POST",
+          headers: { "If-Match": String(latestVersion) },
+          body: { text: selectedText, entity_type: markType },
+        },
+      );
     },
-    onSuccess: () => {
+    onSuccess: async (res) => {
       setSelectedText("");
       setActiveFindingIdx(null);
+      if (res?.document) {
+        queryClient.setQueryData(["document", docId], res.document);
+      }
+      await queryClient.invalidateQueries({ queryKey: ["document", docId] });
+      await queryClient.refetchQueries({ queryKey: ["document", docId] });
       emitToast({ kind: "success", message: "Hidden everywhere in the document." });
-      queryClient.invalidateQueries({ queryKey: ["document", docId] });
     },
   });
 
@@ -520,7 +606,7 @@ function DocumentReviewContent() {
     if (snippet.length < 2 || snippet.length > 200) {
       emitToast({
         kind: "error",
-        message: "This line cannot be auto-fixed. Please highlight the text manually to hide it.",
+        message: "This line requires manual highlighting to resolve.",
       });
       return;
     }
@@ -528,18 +614,39 @@ function DocumentReviewContent() {
     setFixingFindingIdx(findingIdx);
     setActiveFindingIdx(findingIdx);
     try {
-      await apiRequest(`/documents/${docId}/manual-marks`, {
-        method: "POST",
-        headers: { "If-Match": String(doc.version) },
-        body: {
-          text: snippet,
-          entity_type: mapFindingTypeToMarkType(finding.type),
+      // Always pull latest version first so clicking any conflict never hits a stale version error
+      const freshSan = await apiRequest<SanitizedTextResponse>(`/documents/${docId}/sanitized`, {
+        silentErrorToast: true,
+      }).catch(() => null);
+      const latestVersion = freshSan?.version ?? doc.version;
+
+      const res = await apiRequest<{ document: DocumentDetail; occurrences: number }>(
+        `/documents/${docId}/manual-marks`,
+        {
+          method: "POST",
+          headers: { "If-Match": String(latestVersion) },
+          body: {
+            text: snippet,
+            entity_type: mapFindingTypeToMarkType(finding.type),
+          },
         },
-      });
+      );
       setSelectedText("");
       setActiveFindingIdx(null);
+      if (res?.document) {
+        queryClient.setQueryData(["document", docId], res.document);
+      }
       await queryClient.invalidateQueries({ queryKey: ["document", docId] });
-      emitToast({ kind: "success", message: "Line conflict fixed and hidden everywhere." });
+      await queryClient.refetchQueries({ queryKey: ["document", docId] });
+
+      if (res?.document?.safety_report?.status === "PASS") {
+        emitToast({
+          kind: "success",
+          message: "All conflicts resolved — ready to proceed to Approve and generate!",
+        });
+      } else {
+        emitToast({ kind: "success", message: "Conflict resolved and hidden everywhere." });
+      }
     } catch {
       // apiRequest already emits toast
     } finally {
@@ -598,12 +705,14 @@ function DocumentReviewContent() {
             total: Math.max(initialFindings.length, fixedCount),
           });
           await queryClient.invalidateQueries({ queryKey: ["document", docId] });
+          await queryClient.refetchQueries({ queryKey: ["document", docId] });
         } catch {
           failedSnippets.add(snippet.toLowerCase());
         }
       }
 
       await queryClient.invalidateQueries({ queryKey: ["document", docId] });
+      await queryClient.refetchQueries({ queryKey: ["document", docId] });
       const finalCheck = await apiRequest<SanitizedTextResponse>(`/documents/${docId}/sanitized`, {
         silentErrorToast: true,
       });
@@ -843,25 +952,47 @@ function DocumentReviewContent() {
       {doc.safety_report && (
         <div className="mt-4" aria-live="polite">
           {doc.safety_report.status === "PASS" ? (
-            <p className="text-[15px] font-medium text-accent">
-              Safety check passed
-              {doc.safety_report.warnings?.includes("NO_ENTITIES_FOUND")
-                ? " — no personal details were found automatically; please double-check the page."
-                : " — personal details are hidden and ready for your review."}
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-accent/30 bg-accent-tint/60 px-4 py-3 text-[15px] text-accent">
+              <div className="flex items-center gap-2 font-medium">
+                <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
+                <span>
+                  Verdict: Safety check passed
+                  {doc.safety_report.warnings?.includes("NO_ENTITIES_FOUND")
+                    ? " — no personal details were found automatically; please inspect the page before proceeding."
+                    : " — all personal details are hidden. Ready for the next step."}
+                </span>
+              </div>
+              {canApproveAndSend && (
+                <Button
+                  size="sm"
+                  loading={approveAndSendMutation.isPending}
+                  onClick={() => approveAndSendMutation.mutate()}
+                >
+                  <span>Approve and generate</span>
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              )}
+            </div>
           ) : (
             <div
               role="alert"
               className="rounded border-2 border-danger bg-danger-tint p-4 text-[15px] text-danger"
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2 font-semibold">
-                  <AlertTriangle className="h-5 w-5 shrink-0" aria-hidden="true" />
-                  <span>
-                    Safety check found {findings.length} conflict
-                    {findings.length === 1 ? "" : "s"}. Fix them manually by highlighting red text,
-                    auto-fix line by line, or resolve all at once.
-                  </span>
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded bg-danger px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-white">
+                      <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                      Verdict: Manual resolution required
+                    </span>
+                    <span className="text-sm font-semibold text-danger">
+                      {findings.length} conflict{findings.length === 1 ? "" : "s"} remaining
+                    </span>
+                  </div>
+                  <p className="text-sm text-danger/90">
+                    Click any highlighted problem word in the document, click a conflict box below
+                    to resolve it automatically, or click Auto-fix all.
+                  </p>
                 </div>
 
                 {hasSafetyIssues && (
@@ -876,7 +1007,7 @@ function DocumentReviewContent() {
                       >
                         <Sparkles className="h-4 w-4" aria-hidden="true" />
                         {autoFixingAll && autoFixProgress
-                          ? `Fixing ${autoFixProgress.done}/${autoFixProgress.total}…`
+                          ? `Resolving ${autoFixProgress.done}/${autoFixProgress.total}…`
                           : `Auto-fix all (${findings.length})`}
                       </Button>
                     )}
@@ -899,44 +1030,57 @@ function DocumentReviewContent() {
               </div>
 
               {hasSafetyIssues && (
-                <ul className="mt-3 space-y-2 border-t border-danger/20 pt-3 text-sm">
+                <div
+                  role="list"
+                  aria-label="Conflicts requiring resolution"
+                  className="mt-3 space-y-2 border-t border-danger/20 pt-3"
+                >
                   {findings.map((f, i) => {
                     const canFixItem =
                       !doc.vault_expired && Boolean(f.snippet && f.snippet.trim().length >= 2);
                     const isFixingThis = fixingFindingIdx === i;
                     return (
-                      <li
+                      <div
                         key={`${f.start}-${i}`}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded bg-bg/60 px-2.5 py-1.5"
+                        role="listitem"
+                        className="flex flex-wrap items-stretch gap-2"
                       >
-                        <span>
-                          <strong>{f.type}:</strong> {f.reason}
-                          {f.snippet ? ` ("${f.snippet}")` : ""}
-                        </span>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {canFixItem && (
-                            <button
-                              type="button"
-                              disabled={autoFixingAll || fixingFindingIdx !== null}
-                              onClick={() => void handleAutoFixLine(f, i)}
-                              className="inline-flex h-8 items-center gap-1 rounded border border-accent bg-bg px-3 text-xs font-semibold text-accent hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
-                              <span>{isFixingThis ? "Fixing…" : "Auto-fix line"}</span>
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => jumpToIssue(i)}
-                            className="inline-flex h-8 items-center gap-1 rounded border border-danger bg-bg px-3 text-xs font-semibold text-danger hover:bg-danger hover:text-white"
-                          >
-                            Jump to line
-                          </button>
-                        </div>
-                      </li>
+                        <button
+                          type="button"
+                          disabled={!canFixItem || autoFixingAll || fixingFindingIdx !== null}
+                          aria-label={`Resolve conflict ${f.type}: ${f.snippet || f.reason}`}
+                          onClick={() => void handleAutoFixLine(f, i)}
+                          className="group flex flex-1 flex-wrap items-center justify-between gap-2 rounded border border-danger/40 bg-bg px-3 py-2 text-left text-sm text-text shadow-[0_1px_2px_rgba(185,28,28,0.08)] transition-all hover:border-danger hover:bg-danger/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <span className="inline-block rounded bg-danger-tint px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-danger">
+                              {f.type}
+                            </span>
+                            {f.snippet && (
+                              <span className="ml-2 rounded border border-danger/30 bg-danger/10 px-1.5 py-0.5 font-semibold text-danger">
+                                &ldquo;{f.snippet}&rdquo;
+                              </span>
+                            )}
+                            <span className="ml-2 text-xs text-text-muted">{f.reason}</span>
+                          </div>
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded bg-accent-tint px-2.5 py-1 text-xs font-semibold text-accent transition-colors group-hover:bg-accent group-hover:text-white">
+                            <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>{isFixingThis ? "Resolving…" : "Click box to resolve"}</span>
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => jumpToIssue(i)}
+                          aria-label={`Jump to line for ${f.snippet || f.type}`}
+                          className="inline-flex items-center gap-1 rounded border border-danger bg-bg px-3 text-xs font-semibold text-danger hover:bg-danger hover:text-white"
+                        >
+                          Locate
+                        </button>
+                      </div>
                     );
                   })}
-                </ul>
+                </div>
               )}
             </div>
           )}
