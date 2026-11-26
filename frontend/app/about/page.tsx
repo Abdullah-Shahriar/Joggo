@@ -19,8 +19,8 @@ export default function AboutPage() {
           <h2 className="text-xl font-semibold text-text">What {APP_NAME} does</h2>
           <p className="text-[15px] leading-relaxed text-text">
             {APP_NAME} helps doctors and care teams write discharge summaries, case summaries, and
-            treatment plans faster with AI—without ever sharing real patient names or contact
-            details with outside services.
+            treatment plans faster with AI. Names, phone numbers and addresses are removed,
+            double-checked, and approved by you before anything is sent to an AI service.
           </p>
           <p className="text-[15px] leading-relaxed text-text">
             You can upload a PDF, an image (PNG, JPG, or SVG), or snap a photo with your camera.{" "}
@@ -61,8 +61,8 @@ export default function AboutPage() {
             the permanent database or server logs.
           </p>
           <p className="text-[15px] leading-relaxed text-text">
-            Every sign-in, document action, and account change is written to a permanent activity
-            history that cannot be edited or deleted, so compliance reviewers can always verify how
+            Every sign-in, document action, and account change is written to a tamper-evident
+            activity history (any change is detected), so compliance reviewers can always verify how
             the system was used.
           </p>
         </section>

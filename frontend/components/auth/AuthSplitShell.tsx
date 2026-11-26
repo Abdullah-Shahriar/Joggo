@@ -10,7 +10,7 @@ const TRUST_SIGNALS = [
   {
     icon: ShieldCheck,
     title: "Automatic privacy protection",
-    detail: "Names, dates, phone numbers, and record IDs are hidden before anything reaches an AI assistant.",
+    detail: "Names, phone numbers and addresses are removed, double-checked, and approved by you before anything is sent to an AI service.",
   },
   {
     icon: Lock,
@@ -20,7 +20,7 @@ const TRUST_SIGNALS = [
   {
     icon: FileCheck2,
     title: "Doctor review & activity history",
-    detail: "Nothing sends automatically. Every step is logged in a permanent, tamper-protected activity record.",
+    detail: "Nothing sends automatically. Every step is logged in a tamper-evident activity history (any change is detected).",
   },
 ];
 

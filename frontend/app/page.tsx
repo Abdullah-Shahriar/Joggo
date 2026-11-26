@@ -8,7 +8,7 @@ import { APP_NAME } from "@/lib/constants";
 export const metadata: Metadata = {
   title: `${APP_NAME} — Use AI on Patient Records Without Exposing Patients`,
   description:
-    "Upload patient PDFs or photos, hide personal details automatically with safe labels, review side-by-side, and generate clinical drafts without leaking PHI.",
+    "Upload patient PDFs or photos, remove personal details with safe labels, run a second safety check, review side-by-side, and approve before generating clinical drafts.",
 };
 
 const PROBLEM_POINTS = [
@@ -46,10 +46,10 @@ const STEPS = [
 ];
 
 const SAFETY_POINTS = [
-  "Patient names, phone numbers, and addresses are never sent to outside AI services.",
+  "Names, phone numbers and addresses are removed, double-checked, and approved by you before anything is sent to an AI service.",
   "Dates are turned into day counts (such as Day 0 and Day 3), and birthdates become age.",
   "Real details stay only in temporary private memory and clear automatically when you sign out.",
-  "Every important action is recorded in a permanent activity history that cannot be altered.",
+  "Every important action is recorded in a tamper-evident activity history (any change is detected).",
 ];
 
 export default function LandingPage() {
@@ -66,8 +66,9 @@ export default function LandingPage() {
               Use AI on patient records. Without exposing patients.
             </h1>
             <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-text-muted sm:text-base">
-              {APP_NAME} hides personal details before anything reaches an AI writing assistant,
-              then puts the real details back only on your screen.
+              {APP_NAME} removes personal details, runs a second safety check, and waits for your
+              approval before anything reaches an AI writing assistant, then puts the real details
+              back only on your screen.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Link

@@ -7,9 +7,9 @@ Read order each session: `brain.md` → `rules.md` → `architecture.md` → `de
 
 ## 1. Status (edit me)
 
-- Current milestone: **Judge-Review Hardening — Phase 2 complete (local Bangla identifier detection & OCR)**
+- Current milestone: **Judge-Review Hardening — Phase 3 complete (honest privacy & audit copy)**
 - Last updated: 2026-11-26
-- Last full test run: pass (42/42 backend pytest; frontend `next build`, `tsc --noEmit`, `next lint` 0 errors/warnings; backend RSS 226.6 MB peak with `eng+ben` OCR)
+- Last full test run: pass (42/42 backend pytest; frontend `next build`, `tsc --noEmit`, `next lint` 0 errors/warnings)
 - Blockers: Cloud hosting deploy (Render/Vercel env + live URL) and YouTube demo recording require user accounts.
 
 ## 2. Project summary
@@ -185,3 +185,4 @@ Detection is rule + small-model based and not perfect → mandatory human review
 - 2026-11-26 — Dead Code & Leftover Cleanup — Removed stray empty root `package-lock.json`, unused legacy CSS classes/keyframes (`.cs-brand-ring`, `.cs-brand-cross`, `cs-cross-pulse`, `helix-ribbon-gradient`) from `frontend/app/globals.css`, unused template variants/props from `frontend/components/ui/loader-helix.tsx` and `frontend/components/ui/modem-animated-footer.tsx`, and unused imports/helpers from `backend/app/main.py`, `backend/app/routers/documents.py`, and `backend/app/services/jobs.py`.
 - 2026-11-26 — Phase 1 (Approved & Audited External AI Handoff, A03/P8) — Documented `DOC_EXTERNAL_HANDOFF` and `/api/documents/{id}/handoff` in `docs/architecture.md`; added `POST /api/documents/{id}/handoff` enforcing `get_owned_document`, `require_active`, `PASS` safety report, allowed status, `sanitized_sha256` freshness, CSRF, 10/min rate limit, and `DOC_EXTERNAL_HANDOFF` audit logging (provider metadata only) with server-built `prompt_text`; updated `frontend/components/documents/SendToAiButtons.tsx` to require confirmation modal + checkbox before calling `/handoff`, removed frontend prompt building, added external placeholder disclaimer, and added full RBAC/privacy tests in `backend/tests/test_m9_judge_review.py`.
 - 2026-11-26 — Phase 2 (Local Bangla Identifier Detection & OCR, P5) — Added 1-to-1 Bangla digit (`০–৯`) normalization preserving offsets for phone/NID/MRN/date/age matching; added Bangla clinical labels (`:` and `ঃ` separators), `জন্ম তারিখ` DOB marker, `ভর্তির তারিখ` admission anchor, and Bangla title prefixes (`ডাঃ`/`ডা.`, `জনাব`, `মোঃ`, `মোছাঃ`, `বেগম`, `শ্রী`, `শ্রীমতী`); upgraded literal sweep, safety leak scan, and manual marking to `regex` Unicode-aware word boundaries (`[\p{L}\p{N}\p{M}]`); added `tesseract-ocr-ben` to `backend/Dockerfile` and `OCR_LANGS=eng+ben` defaults; updated `docs/architecture.md` & `README.md`; verified 42/42 pytest passing and peak RSS 226.6 MB with `eng+ben` OCR.
+- 2026-11-26 — Phase 3 (Honest Copy, design.md §8) — Replaced absolute privacy and immutability claims across `frontend/app/page.tsx`, `frontend/app/about/page.tsx`, `frontend/app/faq/page.tsx`, `frontend/components/auth/AuthSplitShell.tsx`, and public/app footers with honest review-and-safety-gate wording and "tamper-evident activity history (any change is detected)"; verified 42/42 pytest and frontend typecheck/lint/build green.

@@ -164,7 +164,7 @@ export function PublicLayout({
       <Footer
         brandName={APP_NAME}
         brandHref="/"
-        brandDescription="Privacy-first AI for medical documents. Hide personal details before any AI request."
+        brandDescription="Privacy-first AI for medical documents. Personal details are removed, double-checked, and approved by you before any AI request."
         contactEmail="support@joggo.app"
         navLinks={FOOTER_NAV_LINKS}
         rightNotice="Demo environment — use synthetic data only"

@@ -9,7 +9,7 @@ import { APP_NAME } from "@/lib/constants";
 const FAQ_ITEMS = [
   {
     q: "Does real patient information reach the AI?",
-    a: "No. Only the cleaned version with safe labels—such as [PATIENT_A], Age 58, and [DAY_0]—is sent to the AI writing assistant.",
+    a: "No. Detection is not perfect, so a second safety check and your review are required before sending. Only the cleaned version with safe labels—such as [PATIENT_A], Age 58, and [DAY_0]—is sent to the AI writing assistant.",
   },
   {
     q: "What file types can I upload?",
