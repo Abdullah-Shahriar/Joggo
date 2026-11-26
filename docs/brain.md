@@ -7,9 +7,9 @@ Read order each session: `brain.md` → `rules.md` → `architecture.md` → `de
 
 ## 1. Status (edit me)
 
-- Current milestone: **M6 (complete — starting M7)**
+- Current milestone: **M7 (complete — starting M8)**
 - Last updated: 2026-11-26
-- Last full test run: pass (34/34 backend pytest against PostgreSQL)
+- Last full test run: pass (36/36 backend pytest, 91% coverage on fresh PostgreSQL)
 - Blockers: none
 
 ## 2. Project summary
@@ -91,8 +91,8 @@ Do the milestones in order. Each has a "Done when". Do not start the next until 
 - **Done when:** Data, Complaints, Admin tests pass; admin endpoints never expose filenames or text.
 
 ### M7 — Backend hardening
-- [ ] Full test suite green; coverage report; fix every flaw found; review rules.md S1–S13 and P1–P9 one by one
-- [ ] README draft (setup, env, architecture, limitations)
+- [x] Full test suite green; coverage report; fix every flaw found; review rules.md S1–S13 and P1–P9 one by one
+- [x] README draft (setup, env, architecture, limitations)
 - **Done when:** `pytest` is green from a fresh DB and the checklist in §6 is satisfied for all backend items.
 
 ### M8 — Frontend foundation and public site
@@ -159,3 +159,4 @@ Detection is rule + small-model based and not perfect → mandatory human review
 - 2026-11-26 — M4 — Added HIPAA-18 detection suite (regex, labels, titles, facility, dates/ages, Presidio/spaCy, stoplists, metadata hints, literal sweep, overlap resolution), context-preserving tokenizer, safety gate (literal leak + masked re-detection + pattern checks), 4-step resumable pipeline, manual highlight-to-tokenize with If-Match optimistic locking, approval sha256 check, document review endpoints, and M4 tests (26/26 passed).
 - 2026-11-26 — M5 — Added Gemini & Groq LLM providers, A06 fault-tolerant router (retries, backoff, Retry-After, circuit breaker, output validation + repair retry, provider fallback, semaphore), idempotent send + retry + local re-hydration + TXT/DOCX export, scripts/smoke_llm.py, and M5 tests (31/31 passed).
 - 2026-11-26 — M6 — Added doctor dashboard, documents_query service, user & admin complaints workflow, admin user management (restrict/restore/role + escalation guards + vault wipe), SQL aggregate analytics, and M6 tests (34/34 passed).
+- 2026-11-26 — M7 — Added Gemini/Groq HTTP provider tests, session revocation/audit filter/expired-retry hardening tests, completed P1-P9 & S1-S13 audit, updated README.md draft, verified 36/36 tests passing with 91% coverage on fresh PostgreSQL.
