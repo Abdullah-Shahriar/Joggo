@@ -7,10 +7,10 @@ Read order each session: `brain.md` → `rules.md` → `architecture.md` → `de
 
 ## 1. Status (edit me)
 
-- Current milestone: **M9 (complete — starting M10)**
+- Current milestone: **M10 (local/repo complete — ready for cloud deploy & video)**
 - Last updated: 2026-11-26
-- Last full test run: pass (36/36 backend pytest, 91% cov; frontend 19 routes `next build`, `tsc --noEmit`, `next lint` 0 warnings/errors; live same-origin E2E rewrite flow passed)
-- Blockers: none
+- Last full test run: pass (36/36 backend pytest, 91% cov on fresh DB; frontend `next build`, `tsc --noEmit`, `next lint` 0 errors/warnings; secret/TODO scan 0 hits)
+- Blockers: Cloud hosting deploy (Render/Vercel env + live URL) and YouTube demo recording require user accounts.
 
 ## 2. Project summary
 
@@ -109,9 +109,9 @@ Do the milestones in order. Each has a "Done when". Do not start the next until 
 
 ### M10 — Deploy, docs, demo
 - [ ] Deploy backend (Docker, one worker) + Postgres + frontend; set env vars; seed; verify live URL
-- [ ] README final (problem, track, architecture, setup, limitations, A03 + A06 map)
-- [ ] `scripts/make_sample_pdfs.py` fixtures; demo script (see §7)
-- [ ] Verify the published build matches the repo; no secrets committed
+- [x] README final (problem, track, architecture, setup, limitations, A03 + A06 map)
+- [x] `scripts/make_sample_pdfs.py` fixtures; demo script (see §7)
+- [x] Verify the published build matches the repo; no secrets committed
 - **Done when:** the submission checklist in §8 is all ticked.
 
 ## 6. Rubric traceability (what proves each mark)
@@ -162,3 +162,4 @@ Detection is rule + small-model based and not perfect → mandatory human review
 - 2026-11-26 — M7 — Added Gemini/Groq HTTP provider tests, session revocation/audit filter/expired-retry hardening tests, completed P1-P9 & S1-S13 audit, updated README.md draft, verified 36/36 tests passing with 91% coverage on fresh PostgreSQL.
 - 2026-11-26 — M8 — Built frontend foundation (lib/api.ts, auth context, formatters, middleware redirects, base UI components, BrandLoader, RouteProgressBar, PublicLayout, AppLayout) and public/auth/error pages (Landing, About, FAQ, Login, Signup, Google button, 404, 403, error boundary); verified next build, tsc, lint, and live routes.
 - 2026-11-26 — M9 — Built all authenticated frontend pages for Doctor (Dashboard, New Document with live polling, My Documents, 3-pane Review with highlight-to-tokenize & PDF preview, Help + threads), Admin (Overview, Users, Complaints + threads, Analytics, Audit Logs with update animations), Auditor (Audit Logs), and Profile; verified production build, typecheck, lint (0 warnings), and live same-origin E2E flow.
+- 2026-11-26 — M10 — Finalized README.md (problem, track, architecture, deploy guide, A03/A06 map, limitations), generated 3 synthetic sample PDF fixtures in backend/tests/fixtures/, verified 0 secrets/TODOs and 36/36 pytest + frontend typecheck/lint green from fresh Docker stack.
