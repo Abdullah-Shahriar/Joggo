@@ -19,6 +19,7 @@ import {
 import { useParams, useRouter } from "next/navigation";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
+import { SendToAiButtons } from "@/components/documents/SendToAiButtons";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { BrandLoader } from "@/components/ui/BrandLoader";
 import { Button } from "@/components/ui/Button";
@@ -1414,6 +1415,15 @@ function DocumentReviewContent() {
           </div>
         </section>
       </div>
+
+      {/* Direct Web AI Handoff (Zero-API, Zero-Extension Text Format) */}
+      {canLoadText && doc.status !== "FAILED" && (
+        <SendToAiButtons
+          taskType={doc.task_type}
+          sanitizedText={sanitizedData?.sanitized_text}
+          disabled={!safetyPass}
+        />
+      )}
 
       {/* Dedicated Full-Width Generated Report Sheet below 50/50 split */}
       <section
