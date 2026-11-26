@@ -7,9 +7,9 @@ Read order each session: `brain.md` → `rules.md` → `architecture.md` → `de
 
 ## 1. Status (edit me)
 
-- Current milestone: **M8 (complete — starting M9)**
+- Current milestone: **M9 (complete — starting M10)**
 - Last updated: 2026-11-26
-- Last full test run: pass (36/36 backend pytest, 91% cov; frontend `next build`, `tsc --noEmit`, `next lint` 0 errors, public routes & 404/redirects verified)
+- Last full test run: pass (36/36 backend pytest, 91% cov; frontend 19 routes `next build`, `tsc --noEmit`, `next lint` 0 warnings/errors; live same-origin E2E rewrite flow passed)
 - Blockers: none
 
 ## 2. Project summary
@@ -102,9 +102,9 @@ Do the milestones in order. Each has a "Done when". Do not start the next until 
 - **Done when:** public pages match design.md; logged-in users are redirected away from public pages; 404 works for unknown routes.
 
 ### M9 — Frontend app
-- [ ] Doctor: Dashboard, New document (live steps), My documents, Review page (panes, highlight-to-tokenize, safety banner, approve/generate, result, export), Help (form + thread), Profile
-- [ ] Admin: Overview, Users, Complaints (+thread), Audit logs, Analytics; update animation on every mutation
-- [ ] Auditor: Audit logs
+- [x] Doctor: Dashboard, New document (live steps), My documents, Review page (panes, highlight-to-tokenize, safety banner, approve/generate, result, export), Help (form + thread), Profile
+- [x] Admin: Overview, Users, Complaints (+thread), Audit logs, Analytics; update animation on every mutation
+- [x] Auditor: Audit logs
 - **Done when:** a full end-to-end run works in the browser for each role; all states (loading, empty, error) exist; keyboard navigation works.
 
 ### M10 — Deploy, docs, demo
@@ -161,3 +161,4 @@ Detection is rule + small-model based and not perfect → mandatory human review
 - 2026-11-26 — M6 — Added doctor dashboard, documents_query service, user & admin complaints workflow, admin user management (restrict/restore/role + escalation guards + vault wipe), SQL aggregate analytics, and M6 tests (34/34 passed).
 - 2026-11-26 — M7 — Added Gemini/Groq HTTP provider tests, session revocation/audit filter/expired-retry hardening tests, completed P1-P9 & S1-S13 audit, updated README.md draft, verified 36/36 tests passing with 91% coverage on fresh PostgreSQL.
 - 2026-11-26 — M8 — Built frontend foundation (lib/api.ts, auth context, formatters, middleware redirects, base UI components, BrandLoader, RouteProgressBar, PublicLayout, AppLayout) and public/auth/error pages (Landing, About, FAQ, Login, Signup, Google button, 404, 403, error boundary); verified next build, tsc, lint, and live routes.
+- 2026-11-26 — M9 — Built all authenticated frontend pages for Doctor (Dashboard, New Document with live polling, My Documents, 3-pane Review with highlight-to-tokenize & PDF preview, Help + threads), Admin (Overview, Users, Complaints + threads, Analytics, Audit Logs with update animations), Auditor (Audit Logs), and Profile; verified production build, typecheck, lint (0 warnings), and live same-origin E2E flow.
