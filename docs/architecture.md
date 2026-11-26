@@ -78,6 +78,7 @@ MAX_PDF_PAGES=30
 VAULT_IDLE_MINUTES=30
 VAULT_ABSOLUTE_HOURS=8
 VAULT_MAX_MB=300
+PIPELINE_MAX_WORKERS=
 ADMIN_SEED_EMAIL=  ADMIN_SEED_PASSWORD=   AUDITOR_SEED_EMAIL=  AUDITOR_SEED_PASSWORD=  DOCTOR_SEED_EMAIL=  DOCTOR_SEED_PASSWORD=
 ```
 Model ids change over time: verify them in the provider docs at build time; never hard-code them.
@@ -225,7 +226,8 @@ HIPAA 18 coverage map:
 4. `dates.py` — date candidates (numeric `d/m/y`, `y-m-d`, `12 Oct 2024`, `Oct 12, 2024`, `12 Oct` without year). Parse with `dateutil` (`dayfirst = DATE_ORDER=="DMY"`); two-digit year pivot: ≤ current yy → 20yy else 19yy. Invalid but date-shaped → token `[DAY_?]` kept as DATE span with `unparsed=True`. DOB = date within 25 chars after `DOB|D.O.B|Date of Birth|Born|Birth Date`.
    Also explicit ages ≥ 90: `\b(9\d|1[0-4]\d)\s*(?:y(?:ea)?rs?|y/o|yo|years?)\b` → `AGE90` → replaced by `90+ years`.
 5. `metadata hints` — literal search of the hint strings in the body (source `metadata`, type `OTHER`).
-6. **Literal sweep** (after the first resolve): for every PATIENT/DOCTOR/PERSON value, search each name component (≥3 chars, not in `MEDICAL_TERMS` or common-word list) case-insensitively with word boundaries; and every other entity value as an exact literal. New spans: source `sweep`, same token as the parent entity.
+6. **Literal sweep** (after the first resolve): for every PATIENT/DOCTOR/PERSON value, search each name component (≥3 chars, not in `MEDICAL_TERMS` or common-word list) case-insensitively with Unicode-aware word boundaries (`regex` module: `(?<![\p{L}\p{N}\p{M}])...(?![\p{L}\p{N}\p{M}])`); and every other entity value as an exact literal. New spans: source `sweep`, same token as the parent entity.
+7. **Local Bangla support (P5)**: Bangla digits (`০–৯`) are mapped 1-to-1 to ASCII `0–9` during regex/date/age matching so character offsets stay identical while Vault text remains unchanged; Bangla clinical labels (with `:` and `ঃ` separators), title prefixes (`ডাঃ`/`ডা.`, `জনাব`, `মোঃ`, `মোছাঃ`, `বেগম`, `শ্রী`, `শ্রীমতী`), DOB marker (`জন্ম তারিখ`), and admission anchor (`ভর্তির তারিখ`) run locally alongside `eng+ben` Tesseract OCR.
 
 **Resolve overlaps** (`resolve.py`): priority MRN/ID/PHONE/EMAIL/URL/IP (90) > DOB/DATE/AGE90 (70) > PATIENT/DOCTOR/PERSON (50) > LOCATION/FACILITY (30) > OTHER (20). Sort by (start, -len). On overlap keep the higher priority; tie → higher score; tie → longer. Deterministic and stable.
 
@@ -289,6 +291,7 @@ Prompts (`prompts.py`):
 - `case_summary`: `## Summary`, `## Key findings`, `## Concerns`.
 - `treatment_plan`: `## Assessment`, `## Plan`, `## Monitoring`, `## Follow-up`.
 The backend appends (not the LLM): "_AI-generated draft. Must be reviewed by a licensed clinician before use._"
+External web AI handoff (`POST /api/documents/{id}/handoff`, detailed in §17) reuses these same task headings server-side, requires clinician confirmation + safety PASS + `sanitized_sha256` match, and records audit `DOC_EXTERNAL_HANDOFF`.
 
 ## 17. Send, idempotency and concurrency (A05)
 
@@ -361,8 +364,8 @@ API: standard error shape on 401/403/404/422/429/500.
 
 ## 25. Deployment
 
-- Backend `Dockerfile` (python:3.11-slim): `apt-get install -y tesseract-ocr tesseract-ocr-eng libgl1`, pip install, `python -m spacy download en_core_web_sm`, run `alembic upgrade head && python scripts/seed.py && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1`.
-- Free-tier hosts sleep: document "open the app 1 minute before judging" and add `/api/health` for a keep-alive ping. Vault is lost on restart (documented, handled by §8 startup routine).
+- Backend `Dockerfile` (python:3.11-slim, `MALLOC_ARENA_MAX=2`): `apt-get install -y tesseract-ocr tesseract-ocr-eng tesseract-ocr-ben libgl1`, pip install, `python -m spacy download en_core_web_sm`, run `alembic upgrade head && python scripts/seed.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1`. `PIPELINE_MAX_WORKERS` defaults to `2` in `prod` (`4` in `dev`).
+- Free-tier hosts sleep: `.github/workflows/keepalive.yml` pings `GET https://joggo-nine.vercel.app/api/health` every 10 minutes via cron (no secrets needed). Vault is lost on restart (documented, handled by §8 startup routine).
 - Frontend on Vercel with `BACKEND_URL` env; `next.config.js` rewrites `/api/:path*` to `${BACKEND_URL}/api/:path*`. Cookies set by the backend pass through the rewrite and stay first-party.
 - `docker-compose.yml`: `db` (postgres), `backend`, `frontend`. One command: `docker compose up --build`.
 - `scripts/make_sample_pdfs.py`: three synthetic patients (text lab report; discharge summary with metadata author set; scanned/image-header report).

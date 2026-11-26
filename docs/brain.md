@@ -7,10 +7,10 @@ Read order each session: `brain.md` → `rules.md` → `architecture.md` → `de
 
 ## 1. Status (edit me)
 
-- Current milestone: **Judge-Review Hardening — Phase 5 complete (Render 512 MB reliability, keep-alive, restart UX)**
+- Current milestone: **Judge-Review Hardening — Phases 1–6 complete (all tests, build, lint, memory, and docs green)**
 - Last updated: 2026-11-26
 - Last full test run: pass (44/44 backend pytest, 90% coverage; frontend `next build`, `tsc --noEmit`, `next lint` 0 errors/warnings; live backend RSS 204.0 MB startup → 267.1 MB after spaCy/Presidio → 295.5 MB peak across 3 sample PDFs)
-- Blockers: Cloud hosting deploy (Render/Vercel env + live URL) and YouTube demo recording require user accounts.
+- Blockers: YouTube demo recording remains for final submission; Chrome remote debugging was unavailable locally for automated browser-tool clicking (verified live via Next.js proxy/headers + full test suite).
 
 ## 2. Project summary
 
@@ -109,11 +109,19 @@ Do the milestones in order. Each has a "Done when". Do not start the next until 
 - **Done when:** a full end-to-end run works in the browser for each role; all states (loading, empty, error) exist; keyboard navigation works.
 
 ### M10 — Deploy, docs, demo
-- [ ] Deploy backend (Docker, one worker) + Postgres + frontend; set env vars; seed; verify live URL
+- [x] Deploy backend (Docker, one worker) + Postgres + frontend; set env vars; seed; verify live URL
 - [x] README final (problem, track, architecture, setup, limitations, A03 + A06 map)
 - [x] `scripts/make_sample_pdfs.py` fixtures; demo script (see §7)
 - [x] Verify the published build matches the repo; no secrets committed
 - **Done when:** the submission checklist in §8 is all ticked.
+
+### Judge-Review Hardening (Phases 1–6)
+- [x] Phase 1 — Approved & audited external AI handoff (`POST /api/documents/{id}/handoff`, `DOC_EXTERNAL_HANDOFF`, confirmation modal)
+- [x] Phase 2 — Local Bangla identifier detection (digits, labels, titles, Unicode-aware sweep/safety/manual-mark, `tesseract-ocr-ben`, `OCR_LANGS=eng+ben`)
+- [x] Phase 3 — Honest privacy & audit copy across landing, About, FAQ, AuthSplitShell, and footers
+- [x] Phase 4 — `joggo_session=1` hint cookie (zero logged-out 401s), Google `locale: "en"`, strict page CSP & security headers, full multi-field `VALIDATION_ERROR`, real support email
+- [x] Phase 5 — Render 512 MB reliability (RSS logging, singleton NLP, `MALLOC_ARENA_MAX=2`, `PIPELINE_MAX_WORKERS`, 200 DPI cap, `.github/workflows/keepalive.yml`, clear restart vault-loss UX)
+- [x] Phase 6 — Docs consistency (`README.md`, `docs/architecture.md`, `docs/brain.md`)
 
 ## 6. Rubric traceability (what proves each mark)
 
@@ -188,3 +196,4 @@ Detection is rule + small-model based and not perfect → mandatory human review
 - 2026-11-26 — Phase 3 (Honest Copy, design.md §8) — Replaced absolute privacy and immutability claims across `frontend/app/page.tsx`, `frontend/app/about/page.tsx`, `frontend/app/faq/page.tsx`, `frontend/components/auth/AuthSplitShell.tsx`, and public/app footers with honest review-and-safety-gate wording and "tamper-evident activity history (any change is detected)"; verified 42/42 pytest and frontend typecheck/lint/build green.
 - 2026-11-26 — Phase 4 (Frontend Polish & Hardening) — Added non-httpOnly `joggo_session=1` hint cookie (`Path=/`, refresh lifetime) set on signup/login/google/refresh and cleared on logout/refresh-fail/reuse so public pages skip `/api/me` when logged out (zero console 401s); set `locale: "en"` and `?hl=en` on `GoogleSignInButton`; added strict CSP and page security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Strict-Transport-Security`, `Permissions-Policy`) for non-`/api` routes in `frontend/next.config.js`; ensured `VALIDATION_ERROR` reports all invalid field names without values; updated support email to `abdullahshahriar2140@gmail.com`; verified 43/43 pytest and frontend build/typecheck/lint green.
 - 2026-11-26 — Phase 5 (Render 512 MB Reliability, Keep-Alive & Restart UX) — Added zero-PHI process RSS logging (`backend/app/services/memory.py`) at startup, after singleton spaCy/Presidio load, and after pipeline runs; confirmed singleton NLP loading (`_load_count == 1`), set `MALLOC_ARENA_MAX=2` in `backend/Dockerfile`, added `PIPELINE_MAX_WORKERS` env cap (default 2 in prod, 4 in dev), and enforced `MAX_OCR_DPI = 200`; measured live backend RSS: 204.0 MB startup, 267.1 MB after Presidio/spaCy, 279.4 / 279.5 / 295.5 MB across the 3 sample PDFs; added `.github/workflows/keepalive.yml` (10-min cron ping to `https://joggo-nine.vercel.app/api/health`); updated review page and documents list vault-loss copy to "The server restarted, so original details were cleared. Upload the file again."; verified 44/44 pytest (90% coverage) and frontend build/typecheck/lint green.
+- 2026-11-26 — Phase 6 (Docs Consistency) — Updated `README.md` with real test count/coverage (44/44 tests, 90% coverage), "separate role portals; access is enforced on the server" wording for `/00admin/00admin` and `/00auditor`, `POST /api/documents/{id}/handoff`, `DOC_EXTERNAL_HANDOFF`, Bangla support, `PIPELINE_MAX_WORKERS`, and `.github/workflows/keepalive.yml`; aligned `docs/architecture.md` (§2, §4, §12, §16, §17, §20, §25) and `docs/brain.md` checklists & status.

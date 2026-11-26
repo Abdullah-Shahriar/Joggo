@@ -155,8 +155,8 @@ stateDiagram-v2
 ```mermaid
 flowchart LR
     Doctor["Clinician / Doctor"] -->|"/login or /signup\n(Email + Google OAuth)"| DocApp["/dashboard, /documents,\n/documents/new, /help, /profile"]
-    Admin["Administrator"] -->|"/00admin/00admin\n(Role-Isolated Portal)"| AdminApp["/admin, /admin/users,\n/admin/complaints, /admin/audit,\n/admin/analytics"]
-    Auditor["Compliance Auditor"] -->|"/00auditor\n(Role-Isolated Portal)"| AuditApp["/admin/audit (Read-Only + Verify),\n/help, /profile"]
+    Admin["Administrator"] -->|"/00admin/00admin\n(Separate Role Portal)"| AdminApp["/admin, /admin/users,\n/admin/complaints, /admin/audit,\n/admin/analytics"]
+    Auditor["Compliance Auditor"] -->|"/00auditor\n(Separate Role Portal)"| AuditApp["/admin/audit (Read-Only + Verify),\n/help, /profile"]
 
     Admin -.->|"Blocked on /login\n& 403 on /api/documents"| Denied["403 + Audit Log\n(AUTH_PORTAL_DENIED /\nADMIN_DOC_ACCESS_DENIED)"]
     Auditor -.->|"Blocked on /login\n& 403 on /api/documents"| Denied
@@ -170,8 +170,8 @@ flowchart LR
 - **Bangla (labels, digits, OCR):** Detects Bangla-script clinical labels (`রোগীর নাম`, `পিতার নাম`, `ডাক্তার`, `মোবাইল`, `ঠিকানা`, `এনআইডি`, `রেজি নং`, `জন্ম তারিখ`, `ভর্তির তারিখ`), Bangla title prefixes, Bangla digits (`০–৯`), Unicode-aware literal sweeps, manual marking, and local `eng+ben` Tesseract OCR.
 - **Interactive Conflict Resolution:** When the safety gate flags leftover personal details, JOGGO clearly displays **"Verdict: Manual resolution required"**, turns every flagged word inline into a clickable red button, renders each conflict as an interactive **Conflict Box** (`Click box to resolve` + `Locate`), and supports **Auto-fix all** sequential resolution as well as manual text highlighting.
 - **Protected Side-by-Side Review:** Non-copyable PDF-style preview sheets (`.cs-no-copy` with clipboard/shortcut guards) let clinicians verify the **Cleaned Copy** against the **Original Document** (text view or embedded original file) plus an explainability drawer (**"Why were these details hidden?"**).
-- **Clinical Draft Generation & Multi-Format Export:** Generates structured **Discharge Summaries**, **Case Summaries**, and **Treatment Plans** via Gemini/Groq with automatic fallback and exports re-hydrated drafts as **PDF, PNG, JPG, DOCX, or TXT**.
-- **Isolated Role Portals & Tamper-Evident Compliance:** Separate clinician (`/login`), administrator (`/00admin/00admin`), and auditor (`/00auditor`) portals; strict zero-document access for admins/auditors; PostgreSQL trigger-protected, SHA-256 hash-chained `audit_logs` verifiable via `GET /api/audit/verify`; 13-week activity heatmaps and zero-PHI admin analytics.
+- **Clinical Draft Generation, Approved External Handoff & Multi-Format Export:** Generates structured **Discharge Summaries**, **Case Summaries**, and **Treatment Plans** via Gemini/Groq with automatic fallback, supports an approval-gated & audited external web AI handoff (`POST /api/documents/{id}/handoff`, audit action `DOC_EXTERNAL_HANDOFF`) using sanitized text only, and exports re-hydrated drafts as **PDF, PNG, JPG, DOCX, or TXT**.
+- **Separate Role Portals & Tamper-Evident Compliance:** Separate role portals for clinicians (`/login`), administrators (`/00admin/00admin`), and auditors (`/00auditor`) — access is enforced on the server; strict zero-document access for admins/auditors; PostgreSQL trigger-protected, SHA-256 hash-chained `audit_logs` verifiable via `GET /api/audit/verify`; 13-week activity heatmaps and zero-PHI admin analytics.
 - **Responsive Mobile-First UI:** Full mobile navigation drawers, responsive split-pane tabs, touch-friendly controls, and zero horizontal overflow across phone, tablet, and desktop screens.
 
 ---
@@ -195,7 +195,7 @@ JOGGO's clean separation between local extraction/vaulting and external LLM infe
 | :--- | :--- |
 | **Frontend** | Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS, TanStack Query, React Hook Form + Zod, Lucide Icons |
 | **Backend** | FastAPI, Python 3.11, SQLAlchemy 2.0, Alembic, Pydantic v2, `httpx`, `slowapi`, `argon2-cffi`, `PyJWT` |
-| **OCR & NLP** | PyMuPDF (`pymupdf`), Tesseract OCR (`pytesseract`), Pillow, Microsoft Presidio, spaCy (`en_core_web_sm`) |
+| **OCR & NLP** | PyMuPDF (`pymupdf`), Tesseract OCR (`pytesseract`, `tesseract-ocr-eng`, `tesseract-ocr-ben`), Pillow, Microsoft Presidio, spaCy (`en_core_web_sm`), Unicode `regex` |
 | **Document Export** | ReportLab (PDF), PyMuPDF + Pillow (PNG/JPG rasterization), `python-docx` (DOCX), UTF-8 TXT |
 | **Database & Security** | PostgreSQL 15+, AES-256-GCM + HKDF (`cryptography`), SHA-256 Hash-Chained Audit Log |
 | **AI Providers** | Google Gemini (`gemini-2.5-flash` + live model auto-discovery) → Groq (`llama-3.3-70b-versatile` + live model auto-discovery) |
@@ -243,6 +243,8 @@ See [`.env.example`](.env.example). Never commit `.env` or real secrets.
 | `GROQ_API_KEY` | GroqCloud API key (fallback LLM) | *(secret)* |
 | `GROQ_MODEL` | Groq model ID (auto-discovers live model on 404/decommission) | `llama-3.3-70b-versatile` |
 | `LLM_PROVIDER_ORDER` | Comma-separated failover order | `gemini,groq` |
+| `OCR_LANGS` | Local Tesseract OCR languages (English + Bangla) | `eng+ben` |
+| `PIPELINE_MAX_WORKERS` | Pipeline worker thread cap (defaults to `2` in `prod`, `4` in `dev`) | `2` (prod) / `4` (dev) |
 | `GOOGLE_CLIENT_ID` | Google OAuth 2.0 Web Client ID (also exposed at runtime via `/api/auth/config`) | *(optional)* |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Optional build-time Google Client ID for Vercel frontend | *(optional)* |
 | `ADMIN_SEED_EMAIL` / `ADMIN_SEED_PASSWORD` | Optional initial Admin account seed | *(optional)* |
@@ -262,7 +264,8 @@ See [`.env.example`](.env.example). Never commit `.env` or real secrets.
 3. Set environment variables: `ENV=prod`, `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_ORIGIN` (your Vercel URL), `GEMINI_API_KEY`, `GROQ_API_KEY`, `GOOGLE_CLIENT_ID` (optional), and seed credentials.
 4. Container startup automatically runs:
    `alembic upgrade head && python scripts/seed.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1`
-   *(`--workers 1` is required so the in-memory AES-256-GCM Vault stays consistent within one process.)*
+   *(`--workers 1` is required so the in-memory AES-256-GCM Vault stays consistent within one process; `MALLOC_ARENA_MAX=2`, singleton spaCy/Presidio loading, 200 DPI OCR cap, and `PIPELINE_MAX_WORKERS=2` in `prod` keep memory well inside the 512 MB free tier.)*
+5. **Keep-Alive Workflow:** `.github/workflows/keepalive.yml` runs every 10 minutes via GitHub Actions cron (no secrets needed) and pings `GET https://joggo-nine.vercel.app/api/health` to reduce free-tier cold starts.
 
 ### 2. Frontend on Vercel
 1. Import the repository in Vercel and set **Root Directory** to `frontend`.
@@ -275,8 +278,9 @@ See [`.env.example`](.env.example). Never commit `.env` or real secrets.
 
 ### A03 — Security & Access Control
 - **Authentication & Sessions:** Argon2id password hashing (`argon2-cffi`), 15-minute access JWT + 7-day 256-bit refresh token stored solely as SHA-256 hashes, refresh rotation with reuse detection (revokes full session family and wipes Vault), and 15-minute lockout after 5 failed attempts.
-- **Role & Portal Isolation:** User role, status, and `token_version` are verified from PostgreSQL on every request; non-owner document access returns `404` + `DOC_ACCESS_DENIED`; admin/auditor document endpoints return `403 ADMIN_NO_DOCUMENT_ACCESS` + `ADMIN_DOC_ACCESS_DENIED`; isolated portals enforce role boundaries (`/login`, `/00admin/00admin`, `/00auditor`).
-- **CSRF, Headers & Rate Limiting:** All state-changing endpoints require `X-Requested-With: fetch` and a matching `Origin` (or `Referer` fallback); responses enforce `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: no-referrer`, and `Cache-Control: no-store` on `/api`; `slowapi` rate limits return `429` with `Retry-After`.
+- **Role & Portal Access Control:** User role, status, and `token_version` are verified from PostgreSQL on every request; non-owner document access returns `404` + `DOC_ACCESS_DENIED`; admin/auditor document endpoints return `403 ADMIN_NO_DOCUMENT_ACCESS` + `ADMIN_DOC_ACCESS_DENIED`; `/00admin/00admin` and `/00auditor` are separate role portals; access is enforced on the server (`AUTH_PORTAL_DENIED` on mismatch).
+- **Approved & Audited External Handoff:** `POST /api/documents/{id}/handoff` requires owner + active status, `safety_report.status == "PASS"`, matching `sanitized_sha256`, explicit clinician confirmation checkbox, CSRF, and rate limiting; returns server-built sanitized `prompt_text` and records `DOC_EXTERNAL_HANDOFF` (provider metadata only, never text or filename).
+- **CSRF, Headers & Rate Limiting:** All state-changing endpoints require `X-Requested-With: fetch` and a matching `Origin` (or `Referer` fallback); backend responses enforce `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: no-referrer`, and `Cache-Control: no-store` on `/api`; Next.js page responses add `Strict-Transport-Security`, `Permissions-Policy`, and strict `Content-Security-Policy`; `slowapi` rate limits return `429` with `Retry-After`.
 - **Tamper-Evident Audit Log:** PostgreSQL `BEFORE UPDATE OR DELETE` trigger blocks log tampering; SHA-256 hash chain serialized via `pg_advisory_xact_lock(7001)` and independently verifiable via `GET /api/audit/verify`.
 
 ### A06 — External API & Fault Tolerance
@@ -291,7 +295,7 @@ See [`.env.example`](.env.example). Never commit `.env` or real secrets.
 | :--- | :--- |
 | **Health & Auth** | `GET /api/health`, `GET /api/auth/config`, `POST /api/auth/{signup,login,google,refresh,logout}` |
 | **Profile & Sessions** | `GET/PATCH /api/me`, `POST /api/me/password`, `GET /api/me/sessions`, `DELETE /api/me/sessions/{id}` |
-| **Documents & Pipeline** | `GET/POST /api/documents`, `GET/DELETE /api/documents/{id}`, `GET /api/documents/{id}/{steps,original-text,original-pdf,sanitized,result}`, `POST /api/documents/{id}/{manual-marks,approve,send,retry}`, `GET /api/documents/{id}/export?format=pdf\|png\|jpg\|docx\|txt` |
+| **Documents & Pipeline** | `GET/POST /api/documents`, `GET/DELETE /api/documents/{id}`, `GET /api/documents/{id}/{steps,original-text,original-pdf,sanitized,result}`, `POST /api/documents/{id}/{manual-marks,approve,send,handoff,retry}`, `GET /api/documents/{id}/export?format=pdf\|png\|jpg\|docx\|txt` |
 | **Dashboard & Support** | `GET /api/dashboard`, `GET/POST /api/complaints`, `GET /api/complaints/{id}`, `POST /api/complaints/{id}/messages` |
 | **Admin & Audit** | `GET /api/admin/{overview,analytics,users,complaints}`, `PATCH /api/admin/users/{id}`, `PATCH /api/admin/complaints/{id}/status`, `GET /api/audit`, `GET /api/audit/verify` |
 
@@ -299,13 +303,13 @@ See [`.env.example`](.env.example). Never commit `.env` or real secrets.
 
 ## Testing & Verification
 
-Backend tests run against PostgreSQL (never SQLite) with mocked LLM providers:
+Backend tests run against PostgreSQL (never SQLite) with mocked LLM providers (**44/44 tests passing, 90% backend coverage**):
 
 ```bash
-# Run full backend test suite (40 tests)
+# Run full backend test suite (44/44 tests)
 docker compose exec backend pytest -v
 
-# Backend coverage report
+# Backend coverage report (90% total coverage)
 docker compose exec backend pytest --cov=app --cov-report=term-missing
 
 # Frontend TypeScript & ESLint verification
@@ -328,5 +332,5 @@ docker compose exec backend python scripts/smoke_llm.py
 - Python cannot guarantee deterministic zeroing of freed RAM pages; the AES-256-GCM in-memory Vault is best-effort ephemeral memory protection.
 - Vault data clears on server restart (previously completed documents gracefully display safe placeholders).
 - No email-based password reset or un-marking of already-masked tokens in this demo release.
-- Free-tier cloud hosts sleep after inactivity (ping `GET /api/health` to warm up).
+- Free-tier cloud hosts sleep after inactivity (`.github/workflows/keepalive.yml` pings `GET https://joggo-nine.vercel.app/api/health` every 10 minutes to minimize cold starts).
 - **Demo environment — use synthetic data only.**
