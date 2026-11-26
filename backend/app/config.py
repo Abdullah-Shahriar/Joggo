@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
     LLM_PROVIDER_ORDER: str = "gemini,groq"
     SPACY_MODEL: str = "en_core_web_sm"
-    OCR_LANGS: str = "eng"
+    OCR_LANGS: str = "eng+ben"
     DATE_ORDER: Literal["DMY", "MDY"] = "DMY"
     MAX_UPLOAD_MB: int = 10
     MAX_PDF_PAGES: int = 30

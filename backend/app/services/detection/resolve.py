@@ -1,11 +1,16 @@
-import re
+import regex
 
-from app.services.detection.base import Span
+from app.services.detection.base import (
+    Span,
+    UNICODE_WORD_BOUNDARY_LEFT,
+    UNICODE_WORD_BOUNDARY_RIGHT,
+    normalize_bangla_digits,
+)
 from app.services.detection.dates import detect_dates
 from app.services.detection.labels import detect_labels
 from app.services.detection.presidio_engine import detect_presidio
 from app.services.detection.regex_rules import detect_regex
-from app.services.detection.stoplists import COMMON_WORDS, MEDICAL_TERMS
+from app.services.detection.stoplists import BANGLA_STOPWORDS, COMMON_WORDS, MEDICAL_TERMS
 
 TYPE_PRIORITY: dict[str, int] = {
     "MRN": 90,
@@ -26,7 +31,28 @@ TYPE_PRIORITY: dict[str, int] = {
 }
 
 NAME_TYPES: frozenset[str] = frozenset({"PATIENT", "DOCTOR", "PERSON"})
-TITLE_PREFIX_WORDS: frozenset[str] = frozenset({"dr", "prof", "professor", "mr", "mrs", "ms", "md", "mst"})
+TITLE_PREFIX_WORDS: frozenset[str] = frozenset(
+    {
+        "dr",
+        "prof",
+        "professor",
+        "mr",
+        "mrs",
+        "ms",
+        "md",
+        "mst",
+        "ডাঃ",
+        "ডা",
+        "জনাব",
+        "মোঃ",
+        "মো",
+        "মোছাঃ",
+        "মোছা",
+        "বেগম",
+        "শ্রী",
+        "শ্রীমতী",
+    }
+)
 
 
 def _priority(span: Span) -> int:
@@ -75,7 +101,9 @@ def detect_metadata_hints(text: str, metadata_hints: list[str] | None) -> list[S
         cleaned = hint.strip()
         if len(cleaned) < 4:
             continue
-        pattern = re.compile(r"(?i)(?<!\w)" + re.escape(cleaned) + r"(?!\w)")
+        pattern = regex.compile(
+            r"(?i)" + UNICODE_WORD_BOUNDARY_LEFT + regex.escape(cleaned) + UNICODE_WORD_BOUNDARY_RIGHT
+        )
         for m in pattern.finditer(text):
             spans.append(
                 Span(
@@ -93,11 +121,17 @@ def detect_metadata_hints(text: str, metadata_hints: list[str] | None) -> list[S
 
 
 def extract_name_components(full_name: str) -> list[str]:
-    words = re.findall(r"[A-Za-z]{3,}", full_name)
+    words = regex.findall(r"[\p{L}\p{M}]{3,}", full_name)
     components: list[str] = []
     for w in words:
         low = w.lower()
-        if low in TITLE_PREFIX_WORDS or low in MEDICAL_TERMS or low in COMMON_WORDS:
+        if (
+            low in TITLE_PREFIX_WORDS
+            or w in TITLE_PREFIX_WORDS
+            or low in MEDICAL_TERMS
+            or low in COMMON_WORDS
+            or w in BANGLA_STOPWORDS
+        ):
             continue
         if w not in components:
             components.append(w)
@@ -111,6 +145,7 @@ def _is_covered(start: int, end: int, resolved: list[Span]) -> bool:
 def run_literal_sweep(text: str, resolved: list[Span]) -> list[Span]:
     """Step 6 sweep (architecture.md §12): sweep name components and exact literal values."""
     extra: list[Span] = []
+    norm_text = normalize_bangla_digits(text)
 
     for span in resolved:
         raw_val = text[span.start : span.end].strip()
@@ -119,13 +154,17 @@ def run_literal_sweep(text: str, resolved: list[Span]) -> list[Span]:
         if span.entity_type in {"DATE", "DOB", "AGE90"}:
             continue
 
-        # Exact literal sweep for all non-date entities
+        # Exact literal sweep for all non-date entities (Unicode-aware boundaries for Bangla & English)
         if any(ch.isdigit() for ch in raw_val):
-            lit_pat = re.compile(re.escape(raw_val), re.IGNORECASE)
+            lit_pat = regex.compile(regex.escape(normalize_bangla_digits(raw_val)), regex.IGNORECASE)
+            search_target = norm_text
         else:
-            lit_pat = re.compile(r"(?i)(?<!\w)" + re.escape(raw_val) + r"(?!\w)")
+            lit_pat = regex.compile(
+                r"(?i)" + UNICODE_WORD_BOUNDARY_LEFT + regex.escape(raw_val) + UNICODE_WORD_BOUNDARY_RIGHT
+            )
+            search_target = text
 
-        for m in lit_pat.finditer(text):
+        for m in lit_pat.finditer(search_target):
             if not _is_covered(m.start(), m.end(), resolved):
                 extra.append(
                     Span(
@@ -141,10 +180,12 @@ def run_literal_sweep(text: str, resolved: list[Span]) -> list[Span]:
                     )
                 )
 
-        # Name-component sweep for PATIENT / DOCTOR / PERSON
+        # Name-component sweep for PATIENT / DOCTOR / PERSON (Unicode-aware for Bangla & English)
         if span.entity_type in NAME_TYPES:
             for comp in extract_name_components(raw_val):
-                comp_pat = re.compile(r"(?i)\b" + re.escape(comp) + r"\b")
+                comp_pat = regex.compile(
+                    r"(?i)" + UNICODE_WORD_BOUNDARY_LEFT + regex.escape(comp) + UNICODE_WORD_BOUNDARY_RIGHT
+                )
                 for m in comp_pat.finditer(text):
                     if not _is_covered(m.start(), m.end(), resolved):
                         extra.append(

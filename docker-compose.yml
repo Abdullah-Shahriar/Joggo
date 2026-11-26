@@ -33,7 +33,7 @@ services:
       GROQ_MODEL: ${GROQ_MODEL:-}
       LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-gemini,groq}
       SPACY_MODEL: ${SPACY_MODEL:-en_core_web_sm}
-      OCR_LANGS: ${OCR_LANGS:-eng}
+      OCR_LANGS: ${OCR_LANGS:-eng+ben}
       DATE_ORDER: ${DATE_ORDER:-DMY}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
       MAX_PDF_PAGES: ${MAX_PDF_PAGES:-30}

@@ -1,10 +1,10 @@
 import base64
 from datetime import date, datetime, timezone
 import logging
-import re
 from typing import Any
 import uuid
 
+import regex
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
@@ -16,7 +16,13 @@ from app.models.entity import DocumentEntity, EntitySource
 from app.models.llm_request import LLMRequest, LLMRequestStatus
 from app.models.step import PipelineStep, PipelineStepName, PipelineStepStatus
 from app.services import audit
-from app.services.detection.base import MANUAL_MARK_TYPES, TOKEN_PATTERN_RE, Span
+from app.services.detection.base import (
+    MANUAL_MARK_TYPES,
+    TOKEN_PATTERN_RE,
+    UNICODE_WORD_BOUNDARY_LEFT,
+    UNICODE_WORD_BOUNDARY_RIGHT,
+    Span,
+)
 from app.services.detection.resolve import run_detection
 from app.services.extraction import ExtractionError, extract_document
 from app.services.llm.router import LLMRouterError, route_generate
@@ -466,16 +472,18 @@ def apply_manual_mark(
     else:
         candidate_segments = [cleaned]
 
-    def _find_matches_in_text(target_text: str, needle: str) -> list[re.Match[str]]:
+    def _find_matches_in_text(target_text: str, needle: str) -> list[regex.Match[str]]:
         if any(ch.isdigit() for ch in needle):
-            pat = re.compile(re.escape(needle), re.IGNORECASE)
+            pat = regex.compile(regex.escape(needle), regex.IGNORECASE)
             found = list(pat.finditer(target_text))
         else:
-            pat = re.compile(r"(?i)(?<!\w)" + re.escape(needle) + r"(?!\w)")
+            pat = regex.compile(
+                r"(?i)" + UNICODE_WORD_BOUNDARY_LEFT + regex.escape(needle) + UNICODE_WORD_BOUNDARY_RIGHT
+            )
             found = list(pat.finditer(target_text))
             if not found:
                 # Fallback for terms containing/bounded by punctuation (e.g. "Dr.", "(555)", "O'Brien")
-                found = list(re.compile(re.escape(needle), re.IGNORECASE).finditer(target_text))
+                found = list(regex.compile(regex.escape(needle), regex.IGNORECASE).finditer(target_text))
         return found
 
     matches: list[tuple[int, int]] = []

@@ -167,6 +167,7 @@ flowchart LR
 ## Core Capabilities
 
 - **Multi-Format Clinical Ingestion:** Upload **PDF, PNG, JPG, or SVG** files (up to 10 MB / 30 PDF pages) or capture printed pages directly via the built-in **live device camera viewfinder** with animated upload & privacy-scan progress.
+- **Bangla (labels, digits, OCR):** Detects Bangla-script clinical labels (`রোগীর নাম`, `পিতার নাম`, `ডাক্তার`, `মোবাইল`, `ঠিকানা`, `এনআইডি`, `রেজি নং`, `জন্ম তারিখ`, `ভর্তির তারিখ`), Bangla title prefixes, Bangla digits (`০–৯`), Unicode-aware literal sweeps, manual marking, and local `eng+ben` Tesseract OCR.
 - **Interactive Conflict Resolution:** When the safety gate flags leftover personal details, JOGGO clearly displays **"Verdict: Manual resolution required"**, turns every flagged word inline into a clickable red button, renders each conflict as an interactive **Conflict Box** (`Click box to resolve` + `Locate`), and supports **Auto-fix all** sequential resolution as well as manual text highlighting.
 - **Protected Side-by-Side Review:** Non-copyable PDF-style preview sheets (`.cs-no-copy` with clipboard/shortcut guards) let clinicians verify the **Cleaned Copy** against the **Original Document** (text view or embedded original file) plus an explainability drawer (**"Why were these details hidden?"**).
 - **Clinical Draft Generation & Multi-Format Export:** Generates structured **Discharge Summaries**, **Case Summaries**, and **Treatment Plans** via Gemini/Groq with automatic fallback and exports re-hydrated drafts as **PDF, PNG, JPG, DOCX, or TXT**.
@@ -323,6 +324,7 @@ docker compose exec backend python scripts/smoke_llm.py
 ## Known Limitations
 
 - Automated identifier detection combines rules and lightweight NLP and is never 100% infallible; mandatory clinician review and a second-pass safety scan are strictly enforced before any LLM request.
+- Unlabelled Bangla names in free text may need manual marking.
 - Python cannot guarantee deterministic zeroing of freed RAM pages; the AES-256-GCM in-memory Vault is best-effort ephemeral memory protection.
 - Vault data clears on server restart (previously completed documents gracefully display safe placeholders).
 - No email-based password reset or un-marking of already-masked tokens in this demo release.

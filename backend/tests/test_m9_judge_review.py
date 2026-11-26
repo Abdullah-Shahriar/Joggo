@@ -8,6 +8,10 @@ from sqlalchemy import select
 from app.db import SessionLocal
 from app.models import AuditLog, Document, DocumentStatus, TaskType, User, UserRole, UserStatus
 from app.security import hash_password
+from app.services.detection.resolve import run_detection
+from app.services.safety import run_safety_scan
+from app.services.tokenizer import tokenize_text
+from app.services.vault import vault
 from scripts.make_sample_pdfs import build_text_lab_report_bytes
 from tests.conftest import CSRF_HEADERS
 
@@ -203,3 +207,135 @@ def test_external_handoff_requires_approval_hash_safety_rbac_and_audits(app: Fas
     finally:
         for c in (doc_owner_client, other_doc_client, admin_client, auditor_client, restricted_client):
             c.__exit__(None, None, None)
+
+
+def test_bangla_detection_sweep_safety_and_manual_mark(app: FastAPI) -> None:
+    synthetic_bangla = (
+        "ভর্তির তারিখ: ১০/০৩/২০২৬\n"
+        "রোগীর নামঃ তানভীর রহমান\n"
+        "পিতার নাম: আব্দুল করিম\n"
+        "জন্ম তারিখ: ১৫/০৮/১৯৬৮\n"
+        "মোবাইল: ০১৭১২-৩৪৫৬৭৮\n"
+        "এনআইডি: ১৯৮৫২৬৯১২৩৪৫৬৭৮৯০\n"
+        "রেজি নং: ২০২৬-৮৮৪২\n"
+        "ঠিকানা: বাড়ি ১২, রোড ৪, ধানমন্ডি, ঢাকা\n"
+        "ডাক্তার: ডাঃ ফারিহা ইসলাম\n"
+        "অভিভাবক: জনাব সেলিম উদ্দিন\n"
+        "রোগী তানভীর রহমান গতরাতে জ্বর নিয়ে আসেন। তানভীর এর সাথে সাবিনা এসেছেন এবং "
+        "মোঃ রফিকুল ইসলাম পরীক্ষা সম্পন্ন করেছেন। রোগীর বয়স ৯২ বছর নয়, স্থিতিশীল আছেন।\n"
+    )
+
+    spans = run_detection(synthetic_bangla, date_order="DMY", use_presidio=False)
+    tok = tokenize_text(synthetic_bangla, spans)
+    sanitized = tok.sanitized_text
+
+    # 1. All synthetic Bangla identifiers removed & DOB/Admission/Age90 converted
+    assert "[PATIENT_A]" in sanitized
+    assert "Age 57" in sanitized
+    assert "[DAY_0]" in sanitized
+    assert "90+ years" in sanitized
+    for secret in (
+        "তানভীর রহমান",
+        "তানভীর",
+        "আব্দুল করিম",
+        "০১৭১২-৩৪৫৬৭৮",
+        "১৯৮৫২৬৯১২৩৪৫৬৭৮৯০",
+        "২০২৬-৮৮৪২",
+        "ধানমন্ডি",
+        "ফারিহা ইসলাম",
+        "সেলিম উদ্দিন",
+        "রফিকুল ইসলাম",
+        "১৫/০৮/১৯৬৮",
+        "১০/০৩/২০২৬",
+    ):
+        assert secret not in sanitized, f"Expected {secret!r} to be redacted in: {sanitized}"
+
+    # Original Bangla text preserved verbatim in mapping values (not ASCII-mutated)
+    assert any("০১৭১২-৩৪৫৬৭৮" in v for v in tok.mapping.values())
+    assert any("তানভীর রহমান" in v for v in tok.mapping.values())
+
+    # 2. Clean Bangla text passes safety scan
+    clean_report = run_safety_scan(
+        sanitized_text=sanitized,
+        mapping=tok.mapping,
+        name_components=tok.name_components,
+        entity_count=sum(tok.entity_summary.values()),
+        date_order="DMY",
+        use_presidio=False,
+    )
+    assert clean_report["status"] == "PASS", clean_report
+
+    # 3. Seeded Bangla leak (both Bangla name component and Bangla-digit phone) causes BLOCK
+    leaked_name_report = run_safety_scan(
+        sanitized_text=sanitized + "\nফলোআপ নোট: তানভীর আজ স্থিতিশীল।",
+        mapping=tok.mapping,
+        name_components=tok.name_components,
+        entity_count=sum(tok.entity_summary.values()),
+        date_order="DMY",
+        use_presidio=False,
+    )
+    assert leaked_name_report["status"] == "BLOCK"
+    assert any(f["type"] in {"LEAK_LITERAL", "LEAK_NAME_COMPONENT"} for f in leaked_name_report["findings"])
+
+    leaked_phone_report = run_safety_scan(
+        sanitized_text=sanitized + "\nযোগাযোগ ০১৭৯৯-৮৮৭৭৬৬",
+        mapping=tok.mapping,
+        name_components=tok.name_components,
+        entity_count=sum(tok.entity_summary.values()),
+        date_order="DMY",
+        use_presidio=False,
+    )
+    assert leaked_phone_report["status"] == "BLOCK"
+    assert any(f["type"] == "PHONE" for f in leaked_phone_report["findings"])
+
+    # 4. Line-start bare 'নাম:' works
+    bare_spans = run_detection("নাম: নাসরিন আক্তার\nরিপোর্ট স্বাভাবিক আছে।", use_presidio=False)
+    bare_tok = tokenize_text("নাম: নাসরিন আক্তার\nরিপোর্ট স্বাভাবিক আছে।", bare_spans)
+    assert "নাসরিন আক্তার" not in bare_tok.sanitized_text
+    assert "[PATIENT_A]" in bare_tok.sanitized_text
+
+    # 5. End-to-end manual mark of an unlabelled Bangla word ("সাবিনা") via API
+    doc_client, _owner = _create_and_login(app, role=UserRole.doctor)
+    try:
+        up = doc_client.post(
+            "/api/documents",
+            files={"file": ("bangla_manual_mark.pdf", build_text_lab_report_bytes(), "application/pdf")},
+            data={"task_type": "case_summary"},
+            headers=CSRF_HEADERS,
+        )
+        assert up.status_code == 202
+        doc_id = up.json()["id"]
+        detail = _wait_for_review(doc_client, doc_id)
+        doc_uuid = uuid.UUID(doc_id)
+
+        # Find the active session family in the vault and replace with synthetic Bangla record
+        sessions_body = doc_client.get("/api/me/sessions").json()
+        me_sessions = sessions_body["items"] if isinstance(sessions_body, dict) else sessions_body
+        family_id = uuid.UUID(me_sessions[0]["family_id"])
+        updated = vault.update(
+            family_id,
+            doc_uuid,
+            {
+                "original_text": synthetic_bangla,
+                "sanitized_text": sanitized,
+                "mapping": tok.mapping,
+                "name_components": tok.name_components,
+                "detected_spans": [],
+                "manual_spans": [],
+            },
+        )
+        assert updated is True
+
+        mark_res = doc_client.post(
+            f"/api/documents/{doc_id}/manual-marks",
+            json={"text": "সাবিনা", "entity_type": "PERSON"},
+            headers={**CSRF_HEADERS, "If-Match": str(detail["version"])},
+        )
+        assert mark_res.status_code == 200, mark_res.text
+        assert mark_res.json()["occurrences"] == 1
+        san_after = doc_client.get(f"/api/documents/{doc_id}/sanitized").json()["sanitized_text"]
+        assert "সাবিনা" not in san_after
+        assert "তানভীর" not in san_after
+        assert "Age 57" in san_after
+    finally:
+        doc_client.__exit__(None, None, None)

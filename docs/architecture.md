@@ -23,7 +23,7 @@ Trust zones: Browser + Backend + Vault = trusted. PostgreSQL = holds no real ide
 
 ## 2. Tech stack (exact)
 
-Backend: Python 3.11, FastAPI, Uvicorn (1 worker), SQLAlchemy 2.0 (sync), psycopg 3, Alembic, Pydantic v2 + pydantic-settings, `python-multipart`, `argon2-cffi`, `PyJWT`, `google-auth`, `slowapi`, `httpx`, `cryptography`, `PyMuPDF`, `pytesseract` + system `tesseract-ocr`, `Pillow`, `presidio-analyzer`, `spacy` + model `en_core_web_sm` (configurable via `SPACY_MODEL`), `regex`, `python-dateutil`, `pycountry`, `python-docx`, `reportlab` (sample PDFs only), `pytest`, `pytest-cov`.
+Backend: Python 3.11, FastAPI, Uvicorn (1 worker), SQLAlchemy 2.0 (sync), psycopg 3, Alembic, Pydantic v2 + pydantic-settings, `python-multipart`, `argon2-cffi`, `PyJWT`, `google-auth`, `slowapi`, `httpx`, `cryptography`, `PyMuPDF`, `pytesseract` + system `tesseract-ocr` (`tesseract-ocr-eng`, `tesseract-ocr-ben`), `Pillow`, `presidio-analyzer`, `spacy` + model `en_core_web_sm` (configurable via `SPACY_MODEL`), `regex`, `python-dateutil`, `pycountry`, `python-docx`, `reportlab` (sample PDFs only), `pytest`, `pytest-cov`.
 Frontend: Next.js 14 (App Router), TypeScript strict, Tailwind CSS, TanStack Query, react-hook-form + zod, `lucide-react`.
 DB: PostgreSQL 15+. Infra: Docker, docker-compose (dev), Render (backend + Postgres) or equivalent, Vercel (frontend).
 
@@ -71,7 +71,7 @@ GROQ_API_KEY=
 GROQ_MODEL=<set to a current Groq-hosted instruct model id from Groq docs>
 LLM_PROVIDER_ORDER=gemini,groq
 SPACY_MODEL=en_core_web_sm
-OCR_LANGS=eng
+OCR_LANGS=eng+ben
 DATE_ORDER=DMY
 MAX_UPLOAD_MB=10
 MAX_PDF_PAGES=30

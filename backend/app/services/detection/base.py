@@ -46,6 +46,17 @@ TOKEN_PATTERN_RE = re.compile(
     r"\[(?:PATIENT|DOCTOR|PERSON|PHONE|EMAIL|ID|MRN|LOCATION|FACILITY|URL|IP|OTHER|DAY)_[A-Z0-9?-]+\]"
 )
 
+BANGLA_DIGIT_TRANS = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
+
+# Unicode-aware word boundaries for regex module (handles Bangla vowel signs / combining marks \p{M}).
+UNICODE_WORD_BOUNDARY_LEFT = r"(?<![\p{L}\p{N}\p{M}])"
+UNICODE_WORD_BOUNDARY_RIGHT = r"(?![\p{L}\p{N}\p{M}])"
+
+
+def normalize_bangla_digits(text: str) -> str:
+    """Map Bangla digits ০-৯ 1-to-1 to ASCII 0-9 while preserving exact character offsets."""
+    return text.translate(BANGLA_DIGIT_TRANS)
+
 
 def has_adjacent_medical_unit(text: str, end: int) -> bool:
     tail = text[end : end + 12]

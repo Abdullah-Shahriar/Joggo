@@ -4,11 +4,13 @@ from decimal import Decimal
 import re
 from typing import Any
 
-from app.services.detection.base import Span
+import regex
+
+from app.services.detection.base import Span, normalize_bangla_digits
 from app.services.detection.resolve import NAME_TYPES, extract_name_components
 
-ADMISSION_ANCHOR_RE = re.compile(
-    r"(?i)\b(?:Date\s+of\s+Admission|Admitted|Admission|DOA)\b"
+ADMISSION_ANCHOR_RE = regex.compile(
+    r"(?i)(?:\b(?:Date\s+of\s+Admission|Admitted|Admission|DOA)\b|ভর্তির\s*তারিখ)"
 )
 SECONDARY_ANCHOR_RE = re.compile(
     r"(?i)\bDate\s+of\s+(?:Report|Collection|Sample|Service|Visit)\b"
@@ -49,7 +51,7 @@ def _index_to_letters(idx: int) -> str:
 
 
 def normalize_entity_value(entity_type: str, raw: str) -> str:
-    cleaned = " ".join(raw.strip().split())
+    cleaned = normalize_bangla_digits(" ".join(raw.strip().split()))
     if entity_type == "PHONE":
         digits = re.sub(r"\D", "", cleaned)
         if digits.startswith("8801") and len(digits) == 13:
@@ -58,7 +60,7 @@ def normalize_entity_value(entity_type: str, raw: str) -> str:
     if entity_type in {"ID", "MRN"}:
         alnum = re.sub(r"[^A-Za-z0-9]", "", cleaned).casefold()
         return alnum or cleaned.casefold()
-    stripped = cleaned.strip(".,;:!?\"'()[]{}")
+    stripped = cleaned.strip(".,;:!?\"'()[]{}।")
     return stripped.casefold()
 
 

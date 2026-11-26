@@ -2,7 +2,15 @@ from datetime import datetime, timezone
 import re
 from typing import Any
 
-from app.services.detection.base import TOKEN_PATTERN_RE, has_adjacent_medical_unit
+import regex
+
+from app.services.detection.base import (
+    TOKEN_PATTERN_RE,
+    UNICODE_WORD_BOUNDARY_LEFT,
+    UNICODE_WORD_BOUNDARY_RIGHT,
+    has_adjacent_medical_unit,
+    normalize_bangla_digits,
+)
 from app.services.detection.dates import DATE_PATTERNS, detect_dates
 from app.services.detection.labels import detect_labels
 from app.services.detection.presidio_engine import detect_presidio
@@ -14,7 +22,7 @@ from app.services.detection.regex_rules import (
     URL_RE,
     detect_regex,
 )
-from app.services.detection.stoplists import COMMON_WORDS, MEDICAL_TERMS
+from app.services.detection.stoplists import BANGLA_STOPWORDS, COMMON_WORDS, MEDICAL_TERMS
 
 AGE_TOKEN_RE = re.compile(r"\b(?:Age\s+(?:\d{1,2}|90\+)|90\+\s+years)\b")
 IMAGE_MARKER_RE = re.compile(r"\[IMAGE_TEXT p\d+\]")
@@ -82,6 +90,7 @@ def run_safety_scan(
         warnings.append("NO_ENTITIES_FOUND")
 
     masked = _mask_tokens_preserve_offsets(sanitized_text)
+    masked_norm = normalize_bangla_digits(masked)
 
     # 1. Literal leak check against Vault mapping values & name components (>= 3 chars)
     for tok, real_val in mapping.items():
@@ -90,13 +99,17 @@ def run_safety_scan(
         cleaned = real_val.strip()
         if len(cleaned) < 3:
             continue
-        if cleaned.lower() in COMMON_WORDS or cleaned.lower() in MEDICAL_TERMS:
+        if cleaned.lower() in COMMON_WORDS or cleaned.lower() in MEDICAL_TERMS or cleaned in BANGLA_STOPWORDS:
             continue
         if any(ch.isdigit() for ch in cleaned):
-            pat = re.compile(re.escape(cleaned), re.IGNORECASE)
+            pat = regex.compile(regex.escape(normalize_bangla_digits(cleaned)), regex.IGNORECASE)
+            target = masked_norm
         else:
-            pat = re.compile(r"(?i)(?<!\w)" + re.escape(cleaned) + r"(?!\w)")
-        for m in pat.finditer(masked):
+            pat = regex.compile(
+                r"(?i)" + UNICODE_WORD_BOUNDARY_LEFT + regex.escape(cleaned) + UNICODE_WORD_BOUNDARY_RIGHT
+            )
+            target = masked
+        for m in pat.finditer(target):
             _add_finding(
                 findings,
                 seen,
@@ -107,9 +120,16 @@ def run_safety_scan(
             )
 
     for comp in name_components:
-        if len(comp) < 3 or comp.lower() in COMMON_WORDS or comp.lower() in MEDICAL_TERMS:
+        if (
+            len(comp) < 3
+            or comp.lower() in COMMON_WORDS
+            or comp.lower() in MEDICAL_TERMS
+            or comp in BANGLA_STOPWORDS
+        ):
             continue
-        pat = re.compile(r"(?i)\b" + re.escape(comp) + r"\b")
+        pat = regex.compile(
+            r"(?i)" + UNICODE_WORD_BOUNDARY_LEFT + regex.escape(comp) + UNICODE_WORD_BOUNDARY_RIGHT
+        )
         for m in pat.finditer(masked):
             _add_finding(
                 findings,
@@ -139,14 +159,14 @@ def run_safety_scan(
                 end=span.end,
             )
 
-    # 3. Direct pattern checks (email, URL, IPv4, 10+ digits, full date, phone)
+    # 3. Direct pattern checks (email, URL, IPv4, 10+ digits, full date, phone; supports Bangla digits)
     for m in EMAIL_RE.finditer(masked):
         _add_finding(findings, seen, ftype="EMAIL", reason="Residual email pattern", start=m.start(), end=m.end())
     for m in URL_RE.finditer(masked):
         _add_finding(findings, seen, ftype="URL", reason="Residual URL pattern", start=m.start(), end=m.end())
-    for m in IPV4_RE.finditer(masked):
+    for m in IPV4_RE.finditer(masked_norm):
         _add_finding(findings, seen, ftype="IP", reason="Residual IPv4 pattern", start=m.start(), end=m.end())
-    for m in TEN_PLUS_DIGITS_RE.finditer(masked):
+    for m in TEN_PLUS_DIGITS_RE.finditer(masked_norm):
         if not has_adjacent_medical_unit(masked, m.end()):
             _add_finding(
                 findings,
@@ -156,15 +176,15 @@ def run_safety_scan(
                 start=m.start(),
                 end=m.end(),
             )
-    for m in BD_MOBILE_RE.finditer(masked):
+    for m in BD_MOBILE_RE.finditer(masked_norm):
         if not has_adjacent_medical_unit(masked, m.end()):
             _add_finding(findings, seen, ftype="PHONE", reason="Residual phone pattern", start=m.start(), end=m.end())
-    for m in INTL_PHONE_RE.finditer(masked):
+    for m in INTL_PHONE_RE.finditer(masked_norm):
         digits = "".join(ch for ch in m.group(0) if ch.isdigit())
         if len(digits) >= 10 and not has_adjacent_medical_unit(masked, m.end()):
             _add_finding(findings, seen, ftype="PHONE", reason="Residual phone pattern", start=m.start(), end=m.end())
     for _rule_id, dpat in DATE_PATTERNS:
-        for m in dpat.finditer(masked):
+        for m in dpat.finditer(masked_norm):
             _add_finding(findings, seen, ftype="DATE", reason="Residual date pattern", start=m.start(), end=m.end())
 
     findings.sort(key=lambda f: (f["start"], f["end"]))

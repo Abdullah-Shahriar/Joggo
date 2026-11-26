@@ -1,6 +1,6 @@
 import re
 
-from app.services.detection.base import Span, has_adjacent_medical_unit
+from app.services.detection.base import Span, has_adjacent_medical_unit, normalize_bangla_digits
 
 EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 URL_RE = re.compile(r"\bhttps?://[^\s<>\"'\)\]]+", re.IGNORECASE)
@@ -8,7 +8,7 @@ IPV4_RE = re.compile(r"(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)")
 BD_MOBILE_RE = re.compile(r"(?<!\d)(?:\+?88[\s-]?)?01[3-9][\s-]?\d{2}[\s-]?\d{6}(?!\d)")
 INTL_PHONE_RE = re.compile(r"(?<!\w)\+\d{1,3}[\s-]?\(?\d{2,4}\)?[\s-]?\d{3,4}[\s-]?\d{3,4}(?!\d)")
 NID_LABELLED_RE = re.compile(
-    r"(?i)\b(?:NID|National\s*ID|NIN|SSN)\s*(?:No\.?|Number|#)?\s*[:#-]?\s*(\d{17}|\d{13}|\d{10}|\d{3}-\d{2}-\d{4})\b"
+    r"(?i)(?:\b(?:NID|National\s*ID|NIN|SSN)\b|এনআইডি|জাতীয়\s*পরিচয়পত্র)\s*(?:No\.?|Number|নং|#)?\s*[:ঃ#-]?\s*(\d{17}|\d{13}|\d{10}|\d{3}-\d{2}-\d{4})(?!\d)"
 )
 NID_STANDALONE_RE = re.compile(r"(?<![\d.])(\d{17}|\d{13})(?![\d.])")
 
@@ -22,6 +22,8 @@ def _is_valid_ipv4(raw: str) -> bool:
 
 def detect_regex(text: str) -> list[Span]:
     spans: list[Span] = []
+    # 1-to-1 digit translation preserves exact character offsets on `text`.
+    norm = normalize_bangla_digits(text)
 
     for m in EMAIL_RE.finditer(text):
         spans.append(
@@ -52,7 +54,7 @@ def detect_regex(text: str) -> list[Span]:
             )
         )
 
-    for m in IPV4_RE.finditer(text):
+    for m in IPV4_RE.finditer(norm):
         if _is_valid_ipv4(m.group(0)):
             spans.append(
                 Span(
@@ -66,7 +68,7 @@ def detect_regex(text: str) -> list[Span]:
                 )
             )
 
-    for m in BD_MOBILE_RE.finditer(text):
+    for m in BD_MOBILE_RE.finditer(norm):
         if not has_adjacent_medical_unit(text, m.end()):
             spans.append(
                 Span(
@@ -80,7 +82,7 @@ def detect_regex(text: str) -> list[Span]:
                 )
             )
 
-    for m in INTL_PHONE_RE.finditer(text):
+    for m in INTL_PHONE_RE.finditer(norm):
         digits = "".join(ch for ch in m.group(0) if ch.isdigit())
         if len(digits) >= 10 and not has_adjacent_medical_unit(text, m.end()):
             spans.append(
@@ -95,7 +97,7 @@ def detect_regex(text: str) -> list[Span]:
                 )
             )
 
-    for m in NID_LABELLED_RE.finditer(text):
+    for m in NID_LABELLED_RE.finditer(norm):
         spans.append(
             Span(
                 start=m.start(1),
@@ -108,7 +110,7 @@ def detect_regex(text: str) -> list[Span]:
             )
         )
 
-    for m in NID_STANDALONE_RE.finditer(text):
+    for m in NID_STANDALONE_RE.finditer(norm):
         if not has_adjacent_medical_unit(text, m.end(1)):
             spans.append(
                 Span(

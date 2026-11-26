@@ -2,9 +2,15 @@ from datetime import date, datetime, timezone
 import re
 
 from dateutil import parser as dateutil_parser
+import regex
 
 from app.config import get_settings
-from app.services.detection.base import Span
+from app.services.detection.base import (
+    Span,
+    UNICODE_WORD_BOUNDARY_LEFT,
+    UNICODE_WORD_BOUNDARY_RIGHT,
+    normalize_bangla_digits,
+)
 
 MONTH_NAMES = (
     r"Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
@@ -20,10 +26,21 @@ DATE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("date.day_month", re.compile(rf"\b\d{{1,2}}\s+(?:{MONTH_NAMES})\b(?!\s*,?\s*\d{{2,4}})", re.IGNORECASE)),
 )
 
-DOB_CONTEXT_RE = re.compile(r"(?i)\b(?:DOB|D\.O\.B\.?|Date\s+of\s+Birth|Born|Birth\s+Date)\b")
+DOB_CONTEXT_RE = regex.compile(
+    r"(?i)(?:"
+    + UNICODE_WORD_BOUNDARY_LEFT
+    + r"(?:DOB|D\.O\.B\.?|Date\s+of\s+Birth|Born|Birth\s+Date)"
+    + UNICODE_WORD_BOUNDARY_RIGHT
+    + r"|জন্ম\s*তারিখ)"
+)
 
-# Ages >= 90 (architecture.md §12)
-AGE90_RE = re.compile(r"\b(9\d|1[0-4]\d)\s*(?:y(?:ea)?rs?|y/o|yo|years?)\b", re.IGNORECASE)
+# Ages >= 90 (architecture.md §12), English and Bangla
+AGE90_RE = regex.compile(
+    UNICODE_WORD_BOUNDARY_LEFT
+    + r"(9\d|1[0-4]\d)\s*(?:y(?:ea)?rs?|y/o|yo|years?|বছর)"
+    + UNICODE_WORD_BOUNDARY_RIGHT,
+    regex.IGNORECASE,
+)
 
 
 def _apply_two_digit_year_pivot(dt: date, raw: str) -> date:
@@ -55,10 +72,12 @@ def detect_dates(text: str, *, date_order: str | None = None) -> list[Span]:
     order = (date_order or get_settings().DATE_ORDER).upper()
     dayfirst = order == "DMY"
     spans: list[Span] = []
+    # 1-to-1 digit translation preserves exact character offsets on `text`.
+    norm = normalize_bangla_digits(text)
 
     for rule_id, pattern in DATE_PATTERNS:
         has_year = rule_id != "date.day_month"
-        for m in pattern.finditer(text):
+        for m in pattern.finditer(norm):
             raw = m.group(0)
             # Check if this date appears within 25 chars after a DOB label
             prefix_window = text[max(0, m.start() - 25) : m.start()]
@@ -91,7 +110,7 @@ def detect_dates(text: str, *, date_order: str | None = None) -> list[Span]:
                 )
             )
 
-    for m in AGE90_RE.finditer(text):
+    for m in AGE90_RE.finditer(norm):
         spans.append(
             Span(
                 start=m.start(),
