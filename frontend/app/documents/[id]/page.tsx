@@ -9,6 +9,7 @@ import {
   Download,
   FileText,
   HelpCircle,
+  Lock,
   Trash2,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
@@ -504,6 +505,28 @@ function DocumentReviewContent() {
     emitToast({ kind: "success", message: "Copied to clipboard." });
   };
 
+  const blockProtectedCopy = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    emitToast({
+      kind: "error",
+      message: "Copying is disabled on protected security documents.",
+    });
+  };
+
+  const blockProtectedShortcut = (e: React.KeyboardEvent, blockSelectAll = false) => {
+    const key = e.key.toLowerCase();
+    if (
+      (e.ctrlKey || e.metaKey) &&
+      (key === "c" || key === "x" || key === "s" || key === "p" || (blockSelectAll && key === "a"))
+    ) {
+      e.preventDefault();
+      emitToast({
+        kind: "error",
+        message: "Copying is disabled on protected security documents.",
+      });
+    }
+  };
+
   const { currentStageIdx, stageError } = useMemo(() => {
     if (!doc) return { currentStageIdx: 0, stageError: false };
     if (doc.status === "COMPLETED") return { currentStageIdx: 6, stageError: false };
@@ -788,17 +811,22 @@ function DocumentReviewContent() {
 
       {/* 50/50 PDF-Style Document Split View: Left = Modified/Cleaned PDF sheet, Right = Original PDF sheet */}
       <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
-        {/* Left 50%: Modified / Cleaned PDF sheet */}
+        {/* Left 50%: Modified / Cleaned PDF sheet (highlight-to-hide enabled, clipboard copy blocked) */}
         <section
           aria-label="Cleaned document preview"
-          className={`flex h-[640px] flex-col overflow-hidden rounded border bg-[#EAEDF1] ${
+          onCopy={blockProtectedCopy}
+          onCut={blockProtectedCopy}
+          onContextMenu={blockProtectedCopy}
+          onDragStart={(e) => e.preventDefault()}
+          onKeyDown={(e) => blockProtectedShortcut(e, false)}
+          className={`flex h-[480px] flex-col overflow-hidden rounded border bg-[#EAEDF1] sm:h-[580px] lg:h-[640px] ${
             hasSafetyIssues ? "border-danger" : "border-[#D1D5DB]"
           } ${mobileTab === "cleaned" ? "flex" : "hidden lg:flex"}`}
         >
           {/* PDF Toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#D1D5DB] bg-bg px-4 py-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#D1D5DB] bg-bg px-3 py-2.5 sm:px-4">
             <div className="flex items-center gap-2.5">
-              <span className="flex h-7 w-7 items-center justify-center rounded bg-accent-tint text-accent">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-accent-tint text-accent">
                 <FileText className="h-4 w-4" aria-hidden="true" />
               </span>
               <div>
@@ -806,7 +834,7 @@ function DocumentReviewContent() {
                   Cleaned document (Modified)
                 </h2>
                 <p className="text-[11px] text-text-muted">
-                  Highlight any word on the page to hide it everywhere
+                  Highlight any word to hide it · Copying disabled
                 </p>
               </div>
             </div>
@@ -814,20 +842,20 @@ function DocumentReviewContent() {
               <button
                 type="button"
                 onClick={handleCycleJump}
-                className="inline-flex h-9 items-center gap-1.5 rounded border-2 border-danger bg-bg px-3.5 text-xs font-semibold text-danger hover:bg-danger hover:text-white"
+                className="inline-flex h-9 items-center gap-1.5 rounded border-2 border-danger bg-bg px-3 text-xs font-semibold text-danger hover:bg-danger hover:text-white sm:px-3.5"
               >
                 <ArrowDownCircle className="h-4 w-4" aria-hidden="true" />
                 <span>Jump to issue ({findings.length})</span>
               </button>
             ) : (
-              <span className="rounded bg-bg-subtle px-2 py-0.5 text-[11px] font-medium text-text-muted border border-border">
+              <span className="rounded border border-border bg-bg-subtle px-2 py-0.5 text-[11px] font-medium text-text-muted">
                 {doc.page_count} {doc.page_count === 1 ? "page" : "pages"}
               </span>
             )}
           </div>
 
           {selectedText && (
-            <div className="flex flex-wrap items-center gap-2 border-b border-border bg-accent-tint px-4 py-2.5 text-xs">
+            <div className="flex flex-wrap items-center gap-2 border-b border-border bg-accent-tint px-3 py-2.5 text-xs sm:px-4">
               <span className="max-w-[180px] truncate font-semibold text-text" title={selectedText}>
                 Hide &ldquo;{selectedText}&rdquo; as
               </span>
@@ -854,13 +882,13 @@ function DocumentReviewContent() {
           )}
 
           {/* PDF Viewer Canvas + White Paper Sheet */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-5">
             <div
               ref={cleanedRef}
               onMouseUp={handleCleanedMouseUp}
-              className="mx-auto min-h-full w-full rounded-[2px] border border-[#D1D5DB] bg-white px-6 py-7 text-[15px] text-text shadow-[0_2px_10px_rgba(17,24,39,0.08)] sm:px-8"
+              className="mx-auto min-h-full w-full rounded-[2px] border border-[#D1D5DB] bg-white px-4 py-5 text-[15px] text-text shadow-[0_2px_10px_rgba(17,24,39,0.08)] sm:px-8 sm:py-7"
             >
-              <div className="mb-5 flex items-center justify-between border-b border-border pb-2.5 text-[11px] text-text-muted">
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2.5 text-[11px] text-text-muted">
                 <span className="truncate font-medium text-text">{doc.original_filename}</span>
                 <span className="shrink-0 uppercase tracking-wide text-accent">Privacy-safe copy</span>
               </div>
@@ -877,27 +905,38 @@ function DocumentReviewContent() {
           </div>
         </section>
 
-        {/* Right 50%: Original Document PDF sheet */}
+        {/* Right 50%: Original Document PDF sheet (strictly non-copyable & non-selectable) */}
         <section
-          aria-label="Original document preview"
-          className={`flex h-[640px] flex-col overflow-hidden rounded border border-[#D1D5DB] bg-[#EAEDF1] ${
+          aria-label="Original protected document preview"
+          tabIndex={0}
+          onCopy={blockProtectedCopy}
+          onCut={blockProtectedCopy}
+          onContextMenu={blockProtectedCopy}
+          onDragStart={(e) => e.preventDefault()}
+          onKeyDown={(e) => blockProtectedShortcut(e, true)}
+          className={`cs-no-copy flex h-[480px] flex-col overflow-hidden rounded border border-[#D1D5DB] bg-[#EAEDF1] sm:h-[580px] lg:h-[640px] ${
             mobileTab === "original" ? "flex" : "hidden lg:flex"
           }`}
         >
           {/* PDF Toolbar */}
-          <div className="flex items-center justify-between border-b border-[#D1D5DB] bg-bg px-4 py-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#D1D5DB] bg-bg px-3 py-2.5 sm:px-4">
             <div className="flex items-center gap-2.5">
-              <span className="flex h-7 w-7 items-center justify-center rounded bg-bg-subtle text-text-muted border border-border">
-                <FileText className="h-4 w-4" aria-hidden="true" />
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border bg-bg-subtle text-text-muted">
+                <Lock className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
               </span>
               <div>
-                <h2 className="text-xs font-semibold text-text">Original document</h2>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <h2 className="text-xs font-semibold text-text">Original document</h2>
+                  <span className="rounded bg-bg-subtle px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-muted border border-border">
+                    Non-copyable
+                  </span>
+                </div>
                 <p className="text-[11px] text-text-muted">
-                  Kept only in temporary private memory
+                  Protected view · Temporary private memory only
                 </p>
               </div>
             </div>
-            <div className="flex gap-1 rounded bg-bg-subtle p-0.5 text-xs border border-border">
+            <div className="flex gap-1 rounded border border-border bg-bg-subtle p-0.5 text-xs">
               <button
                 type="button"
                 onClick={() => setOriginalTab("text")}
@@ -923,7 +962,7 @@ function DocumentReviewContent() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-5">
             {doc.vault_expired ? (
               <div className="mx-auto flex min-h-full w-full items-center justify-center rounded-[2px] border border-[#D1D5DB] bg-white p-8 text-center shadow-[0_2px_10px_rgba(17,24,39,0.08)]">
                 <p className="max-w-xs text-sm text-text-muted">
@@ -942,13 +981,14 @@ function DocumentReviewContent() {
                     <img
                       src={filePreview.url}
                       alt="Original uploaded file"
-                      className="max-h-full max-w-full object-contain"
+                      draggable={false}
+                      className="pointer-events-none max-h-full max-w-full select-none object-contain"
                     />
                   </div>
                 ) : (
                   <iframe
-                    title="Original PDF preview"
-                    src={filePreview.url}
+                    title="Original protected PDF preview"
+                    src={`${filePreview.url}#toolbar=0&navpanes=0`}
                     className="h-full w-full rounded-[2px] border border-[#D1D5DB] bg-white shadow-[0_2px_10px_rgba(17,24,39,0.08)]"
                   />
                 )
@@ -958,10 +998,10 @@ function DocumentReviewContent() {
                 </div>
               )
             ) : (
-              <div className="mx-auto min-h-full w-full rounded-[2px] border border-[#D1D5DB] bg-white px-6 py-7 text-[15px] text-text shadow-[0_2px_10px_rgba(17,24,39,0.08)] sm:px-8">
-                <div className="mb-5 flex items-center justify-between border-b border-border pb-2.5 text-[11px] text-text-muted">
+              <div className="mx-auto min-h-full w-full rounded-[2px] border border-[#D1D5DB] bg-white px-4 py-5 text-[15px] text-text shadow-[0_2px_10px_rgba(17,24,39,0.08)] sm:px-8 sm:py-7">
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2.5 text-[11px] text-text-muted">
                   <span className="truncate font-medium text-text">{doc.original_filename}</span>
-                  <span className="shrink-0 uppercase tracking-wide">Original copy</span>
+                  <span className="shrink-0 uppercase tracking-wide">Protected · Copy disabled</span>
                 </div>
                 {origLoading ? (
                   <PaneSkeleton />
@@ -1062,19 +1102,21 @@ function DocumentReviewContent() {
       </section>
 
       {/* Sticky bottom action bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-[#D1D5DB] bg-bg py-3 shadow-[0_-2px_8px_rgba(17,24,39,0.08)]">
-        <div className="mx-auto flex max-w-app items-center justify-between gap-3 px-4 sm:px-6">
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-[#D1D5DB] bg-bg py-2.5 shadow-[0_-2px_8px_rgba(17,24,39,0.08)] sm:py-3">
+        <div className="mx-auto flex max-w-app flex-wrap items-center justify-between gap-2 px-4 sm:gap-3 sm:px-6">
           <Button
             variant="destructive"
             size="sm"
+            className="whitespace-nowrap"
             loading={deleteMutation.isPending}
             onClick={() => setConfirmDelete(true)}
           >
             <Trash2 className="h-4 w-4" aria-hidden="true" />
-            Delete document
+            Delete
           </Button>
 
           <Button
+            className="whitespace-nowrap"
             disabled={!canApproveAndSend}
             loading={approveAndSendMutation.isPending}
             onClick={() => approveAndSendMutation.mutate()}

@@ -121,6 +121,20 @@
   animation: cs-check-draw 300ms ease-out forwards;
 }
 
+.cs-no-copy {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+@media print {
+  .cs-no-copy {
+    display: none !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

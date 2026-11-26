@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ShieldCheck } from "lucide-react";
+import { Lock, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Pagination } from "@/components/ui/Pagination";
 import { TableSkeleton } from "@/components/ui/Skeleton";
 import { SimpleStatusBadge } from "@/components/ui/StatusBadge";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, emitToast } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import type { AuditLogListResponse, AuditVerifyResponse } from "@/lib/types";
 
@@ -42,10 +42,30 @@ function AuditLogsContent() {
     onSuccess: (res) => setVerifyResult(res),
   });
 
+  const blockAuditCopy = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    emitToast({
+      kind: "error",
+      message: "Copying is disabled on protected security audit logs.",
+    });
+  };
+
   return (
-    <div>
+    <div
+      className="cs-no-copy"
+      onCopy={blockAuditCopy}
+      onCut={blockAuditCopy}
+      onContextMenu={blockAuditCopy}
+      onDragStart={(e) => e.preventDefault()}
+    >
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-[28px] font-semibold text-text">Audit logs</h1>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <h1 className="text-[28px] font-semibold text-text">Audit logs</h1>
+          <span className="inline-flex items-center gap-1 rounded border border-border bg-bg-subtle px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+            <Lock className="h-3 w-3 text-accent" aria-hidden="true" />
+            Non-copyable
+          </span>
+        </div>
         <Button
           variant="secondary"
           loading={verifyMutation.isPending}

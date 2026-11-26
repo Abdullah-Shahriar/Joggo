@@ -43,7 +43,6 @@ export function ActivityHeatmap({
     const max = Math.max(1, ...data.map((d) => d.total));
     const sum = data.reduce((acc, d) => acc + d.total, 0);
 
-    // Pad leading empty cells so columns align Sunday (0) .. Saturday (6)
     const padded: Array<ActivityDayItem | null> = [];
     if (data.length > 0) {
       const firstDate = new Date(`${data[0].date}T00:00:00Z`);
@@ -82,27 +81,33 @@ export function ActivityHeatmap({
   return (
     <section
       aria-label={title}
-      className={fullWidth ? "w-full px-4 py-10 sm:px-6 lg:px-10" : "border-y border-border py-6"}
+      className={fullWidth ? "w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-10" : "border-y border-border py-6"}
     >
-      <div className={fullWidth ? "mx-auto w-full max-w-7xl" : "w-full"}>
+      <div
+        className={
+          fullWidth
+            ? "mx-auto w-full max-w-7xl rounded-xl border border-[#D1D5DB] bg-bg p-4 shadow-[0_4px_16px_rgba(17,24,39,0.08)] sm:p-6"
+            : "w-full rounded-lg border border-[#D1D5DB] bg-bg p-4 shadow-[0_3px_12px_rgba(17,24,39,0.07)] sm:p-5"
+        }
+      >
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <div>
             <h2 className="text-lg font-semibold text-text">{title}</h2>
             <p className="mt-0.5 text-[15px] text-text-muted">{subtitle}</p>
           </div>
-          <span className="rounded bg-bg px-2.5 py-1 text-xs font-medium text-text-muted border border-border">
+          <span className="rounded border border-border bg-bg-subtle px-2.5 py-1 text-xs font-medium text-text-muted shadow-[0_1px_2px_rgba(17,24,39,0.05)]">
             {totalEvents} total event{totalEvents === 1 ? "" : "s"} in the last 91 days
           </span>
         </div>
 
         <div className="mt-5 overflow-x-auto pb-2">
-          <div className={fullWidth ? "flex w-full min-w-[680px] flex-col gap-2" : "inline-flex flex-col gap-1.5"}>
+          <div className={fullWidth ? "flex w-full min-w-[540px] flex-col gap-2" : "inline-flex flex-col gap-1.5"}>
             {/* Month headers */}
             <div
               className={
                 fullWidth
-                  ? "grid gap-1.5 pl-9 text-xs font-medium text-text-muted"
-                  : "flex items-center gap-1 pl-9 text-[11px] text-text-muted"
+                  ? "grid gap-1.5 pl-8 text-xs font-medium text-text-muted sm:pl-9"
+                  : "flex items-center gap-1.5 pl-9 text-[11px] text-text-muted"
               }
               style={
                 fullWidth
@@ -117,11 +122,11 @@ export function ActivityHeatmap({
               ))}
             </div>
 
-            <div className="flex w-full gap-2">
+            <div className="flex w-full gap-1.5 sm:gap-2">
               {/* Weekday labels */}
               <div className="flex w-7 shrink-0 flex-col justify-between py-0.5 text-[11px] text-text-muted">
                 {WEEKDAY_LABELS.map((lbl, idx) => (
-                  <span key={idx} className={fullWidth ? "h-5 leading-5" : "h-4 leading-4"}>
+                  <span key={idx} className={fullWidth ? "h-4 leading-4 sm:h-5 sm:leading-5" : "h-4 leading-4"}>
                     {lbl}
                   </span>
                 ))}
@@ -129,7 +134,7 @@ export function ActivityHeatmap({
 
               {/* Grid columns */}
               <div
-                className={fullWidth ? "grid flex-1 gap-1.5" : "flex gap-1"}
+                className={fullWidth ? "grid flex-1 gap-1.5" : "flex gap-1.5"}
                 style={
                   fullWidth
                     ? { gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))` }
@@ -142,14 +147,14 @@ export function ActivityHeatmap({
                   <div
                     key={colIdx}
                     role="row"
-                    className={fullWidth ? "flex flex-col gap-1.5" : "flex flex-col gap-1"}
+                    className="flex flex-col gap-1.5"
                   >
                     {week.map((cell, rowIdx) => {
                       if (!cell) {
                         return (
                           <span
                             key={rowIdx}
-                            className={fullWidth ? "h-5 w-full" : "h-4 w-4"}
+                            className={fullWidth ? "h-4 w-full sm:h-5" : "h-4 w-4"}
                             aria-hidden="true"
                           />
                         );
@@ -164,8 +169,8 @@ export function ActivityHeatmap({
                           onFocus={() => setActiveDay(cell)}
                           onClick={() => setActiveDay(cell)}
                           aria-label={`${formatDateOnly(`${cell.date}T00:00:00Z`)}: ${cell.total} events (${cell.documents_uploaded} documents, ${cell.reviews_and_marks} reviews, ${cell.generations_completed} drafts, ${cell.comments_and_help} support messages)`}
-                          className={`${fullWidth ? "h-5 w-full" : "h-4 w-4"} rounded-[4px] border transition-transform hover:scale-[1.06] ${LEVEL_CLASSES[lvl]} ${
-                            isSelected ? "ring-2 ring-accent ring-offset-1" : ""
+                          className={`${fullWidth ? "h-4 w-full sm:h-5" : "h-4 w-4"} rounded-[4px] border shadow-[0_1px_2px_rgba(17,24,39,0.10)] transition-all hover:scale-[1.06] hover:shadow-[0_2px_6px_rgba(15,118,110,0.22)] ${LEVEL_CLASSES[lvl]} ${
+                            isSelected ? "ring-2 ring-accent ring-offset-1 shadow-[0_2px_6px_rgba(15,118,110,0.28)]" : ""
                           }`}
                         />
                       );
@@ -205,7 +210,7 @@ export function ActivityHeatmap({
               <span
                 key={idx}
                 aria-hidden="true"
-                className={`inline-block h-3.5 w-3.5 rounded-[3px] border ${cls}`}
+                className={`inline-block h-3.5 w-3.5 rounded-[3px] border shadow-[0_1px_2px_rgba(17,24,39,0.10)] ${cls}`}
               />
             ))}
             <span>More</span>

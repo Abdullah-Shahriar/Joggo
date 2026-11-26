@@ -26,11 +26,11 @@ const TRUST_SIGNALS = [
 
 export function AuthSplitShell({ children }: { children: ReactNode }) {
   return (
-    <div className="grid min-h-screen grid-cols-1 bg-bg lg:grid-cols-2">
+    <div className="grid min-h-screen grid-cols-1 overflow-x-hidden bg-bg lg:grid-cols-2">
       {/* Left 50% pane: Trust visual & clinical confidentiality messaging */}
       <aside
         aria-label="Security and privacy overview"
-        className="flex flex-col justify-between border-b border-border bg-bg-subtle px-6 py-8 sm:px-10 lg:border-b-0 lg:border-r lg:px-14 lg:py-12"
+        className="flex flex-col justify-between border-b border-border bg-bg-subtle px-5 py-7 sm:px-10 sm:py-9 lg:border-b-0 lg:border-r lg:px-14 lg:py-12"
       >
         <div>
           <Link href="/" className="inline-flex items-center">

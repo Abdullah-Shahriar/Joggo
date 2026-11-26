@@ -96,7 +96,7 @@ export function AppLayout({
   };
 
   return (
-    <div className={`flex min-h-screen flex-col bg-bg text-text ${bottomPaddingClass}`}>
+    <div className={`flex min-h-screen flex-col overflow-x-hidden bg-bg text-text ${bottomPaddingClass}`}>
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:text-white"
@@ -166,7 +166,7 @@ export function AppLayout({
                       .toUpperCase()}
                   </span>
                 )}
-                <span className="max-w-[140px] truncate">{user.full_name}</span>
+                <span className="hidden max-w-[140px] truncate sm:inline">{user.full_name}</span>
                 <ChevronDown className="h-4 w-4 text-text-muted" />
               </button>
 
