@@ -1,4 +1,4 @@
-# ClinicShield
+# JOGGO
 
 Privacy-first clinical document de-identification and re-hydration gateway.
 
@@ -17,7 +17,7 @@ Clinicians paste patient PDFs into cloud AI tools to save documentation time, ex
 
 ## Solution
 
-ClinicShield runs local extraction + OCR + HIPAA-18 identifier detection + context-preserving tokenization (`[PATIENT_A]`, `Age 58`, `[DAY_0]`) + an independent safety scan + mandatory human review (with highlight-to-tokenize) before sending **only plain sanitized text** to an external LLM. Real patient details live solely in an AES-256-GCM encrypted in-memory Vault, are restored locally on the clinician's screen, and are wiped on logout, idle timeout, account restriction, or server restart.
+JOGGO runs local extraction + OCR + HIPAA-18 identifier detection + context-preserving tokenization (`[PATIENT_A]`, `Age 58`, `[DAY_0]`) + an independent safety scan + mandatory human review (with highlight-to-tokenize) before sending **only plain sanitized text** to an external LLM. Real patient details live solely in an AES-256-GCM encrypted in-memory Vault, are restored locally on the clinician's screen, and are wiped on logout, idle timeout, account restriction, or server restart.
 
 ## Architecture
 

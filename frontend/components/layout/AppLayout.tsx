@@ -94,7 +94,7 @@ export function AppLayout({
         Skip to main content
       </a>
 
-      <header className="sticky top-0 z-30 h-16 border-b border-border bg-bg">
+      <header className="sticky top-0 z-30 h-16 border-b border-[#D1D5DB] bg-bg shadow-[0_1px_4px_rgba(17,24,39,0.08)]">
         <div className="mx-auto flex h-full max-w-app items-center justify-between px-4 sm:px-6">
           <Link href={roleHome} aria-label={`${APP_NAME} home`}>
             <Logo />
@@ -134,8 +134,28 @@ export function AppLayout({
                 aria-expanded={profileOpen}
                 aria-haspopup="menu"
                 onClick={() => setProfileOpen((v) => !v)}
-                className="inline-flex h-10 items-center gap-1.5 rounded px-3 text-sm font-medium text-text hover:bg-bg-subtle"
+                className="inline-flex h-10 items-center gap-2 rounded px-2.5 text-sm font-medium text-text hover:bg-bg-subtle"
               >
+                {user.avatar_data_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={user.avatar_data_url}
+                    alt=""
+                    className="h-7 w-7 rounded-full border border-border object-cover"
+                  />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-tint text-xs font-semibold text-accent"
+                  >
+                    {user.full_name
+                      .split(" ")
+                      .map((part) => part[0])
+                      .join("")
+                      .slice(0, 2)
+                      .toUpperCase()}
+                  </span>
+                )}
                 <span className="max-w-[140px] truncate">{user.full_name}</span>
                 <ChevronDown className="h-4 w-4 text-text-muted" />
               </button>

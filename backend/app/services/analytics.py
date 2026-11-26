@@ -5,13 +5,14 @@ from sqlalchemy import Date, cast, desc, func, select
 from sqlalchemy.orm import Session
 
 from app.models.audit import AuditLog
-from app.models.complaint import Complaint, ComplaintStatus
+from app.models.complaint import Complaint, ComplaintMessage, ComplaintStatus
 from app.models.document import Document, DocumentStatus
 from app.models.entity import DocumentEntity
 from app.models.llm_request import LLMRequest, LLMRequestStatus
 from app.models.step import PipelineStep, PipelineStepName, PipelineStepStatus
 from app.models.user import User, UserStatus
 from app.schemas.admin import (
+    ActivityDayItem,
     AdminAnalyticsResponse,
     AdminOverviewResponse,
     DailyDocumentStatusCounts,
@@ -19,6 +20,93 @@ from app.schemas.admin import (
     EntityTypeCount,
 )
 from app.schemas.document import DocumentListItem
+
+HEATMAP_DAYS = 91  # 13 full weeks
+
+
+def _build_activity_heatmap(
+    db: Session,
+    *,
+    actor_id: uuid.UUID | None = None,
+    days: int = HEATMAP_DAYS,
+) -> list[ActivityDayItem]:
+    """Build daily activity breakdown over the last N days using aggregate SQL counts only (P7)."""
+    now = datetime.now(timezone.utc)
+    start_day = (now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    buckets: dict[str, dict[str, int]] = {}
+    for offset in range(days):
+        d_str = (start_day + timedelta(days=offset)).date().isoformat()
+        buckets[d_str] = {
+            "documents_uploaded": 0,
+            "reviews_and_marks": 0,
+            "generations_completed": 0,
+            "comments_and_help": 0,
+        }
+
+    # 1. Documents uploaded
+    doc_day = cast(func.timezone("UTC", Document.created_at), Date).label("day")
+    doc_stmt = select(doc_day, func.count(Document.id)).where(Document.created_at >= start_day)
+    if actor_id is not None:
+        doc_stmt = doc_stmt.where(Document.owner_id == actor_id)
+    for day_val, cnt in db.execute(doc_stmt.group_by(doc_day)).all():
+        key = day_val.isoformat()
+        if key in buckets:
+            buckets[key]["documents_uploaded"] += int(cnt)
+
+    # 2. Reviews, manual marks, approvals, and completions from audit_logs
+    audit_day = cast(func.timezone("UTC", AuditLog.ts), Date).label("day")
+    tracked_actions = ("DOC_MANUAL_MARK", "DOC_APPROVE", "DOC_COMPLETE", "DOC_EXPORT")
+    audit_stmt = select(audit_day, AuditLog.action, func.count(AuditLog.id)).where(
+        AuditLog.ts >= start_day,
+        AuditLog.action.in_(tracked_actions),
+    )
+    if actor_id is not None:
+        audit_stmt = audit_stmt.where(AuditLog.actor_id == actor_id)
+    for day_val, act, cnt in db.execute(audit_stmt.group_by(audit_day, AuditLog.action)).all():
+        key = day_val.isoformat()
+        if key not in buckets:
+            continue
+        if act in ("DOC_MANUAL_MARK", "DOC_APPROVE"):
+            buckets[key]["reviews_and_marks"] += int(cnt)
+        elif act in ("DOC_COMPLETE", "DOC_EXPORT"):
+            buckets[key]["generations_completed"] += int(cnt)
+
+    # 3. Complaints filed + comment replies
+    comp_day = cast(func.timezone("UTC", Complaint.created_at), Date).label("day")
+    comp_stmt = select(comp_day, func.count(Complaint.id)).where(Complaint.created_at >= start_day)
+    if actor_id is not None:
+        comp_stmt = comp_stmt.where(Complaint.user_id == actor_id)
+    for day_val, cnt in db.execute(comp_stmt.group_by(comp_day)).all():
+        key = day_val.isoformat()
+        if key in buckets:
+            buckets[key]["comments_and_help"] += int(cnt)
+
+    msg_day = cast(func.timezone("UTC", ComplaintMessage.created_at), Date).label("day")
+    msg_stmt = select(msg_day, func.count(ComplaintMessage.id)).where(ComplaintMessage.created_at >= start_day)
+    if actor_id is not None:
+        msg_stmt = msg_stmt.where(ComplaintMessage.author_id == actor_id)
+    for day_val, cnt in db.execute(msg_stmt.group_by(msg_day)).all():
+        key = day_val.isoformat()
+        if key in buckets:
+            buckets[key]["comments_and_help"] += int(cnt)
+
+    return [
+        ActivityDayItem(
+            date=d_str,
+            total=(
+                vals["documents_uploaded"]
+                + vals["reviews_and_marks"]
+                + vals["generations_completed"]
+                + vals["comments_and_help"]
+            ),
+            documents_uploaded=vals["documents_uploaded"],
+            reviews_and_marks=vals["reviews_and_marks"],
+            generations_completed=vals["generations_completed"],
+            comments_and_help=vals["comments_and_help"],
+        )
+        for d_str, vals in buckets.items()
+    ]
 
 
 def get_doctor_dashboard(db: Session, owner_id: uuid.UUID) -> DashboardResponse:
@@ -126,6 +214,7 @@ def get_doctor_dashboard(db: Session, owner_id: uuid.UUID) -> DashboardResponse:
             EntityTypeCount(entity_type=etype, count=int(total)) for etype, total in top_entities
         ],
         avg_pipeline_seconds=avg_secs,
+        activity_heatmap=_build_activity_heatmap(db, actor_id=owner_id),
     )
 
 
@@ -259,4 +348,5 @@ def get_admin_analytics(db: Session) -> AdminAnalyticsResponse:
         complaints_by_status=complaints_by_status,
         safety_block_rate=safety_block_rate,
         entity_type_totals=entity_type_totals,
+        activity_heatmap=_build_activity_heatmap(db, actor_id=None),
     )

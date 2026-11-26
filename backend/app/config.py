@@ -11,7 +11,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    APP_NAME: str = "ClinicShield"
+    APP_NAME: str = "JOGGO"
     ENV: Literal["dev", "prod", "test"] = "dev"
     DATABASE_URL: str = "postgresql+psycopg://clinicshield:clinicshield@localhost:5432/clinicshield"
     JWT_SECRET: str = "dev-only-change-me-32-chars-minimum"

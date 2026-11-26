@@ -15,7 +15,7 @@ def test_health_endpoint_and_security_headers(client: TestClient) -> None:
 
     body = response.json()
     assert body["status"] == "ok"
-    assert body["app_name"] == "ClinicShield"
+    assert body["app_name"] == "JOGGO"
     assert body["env"] in {"dev", "prod", "test"}
     assert "timestamp" in body
 

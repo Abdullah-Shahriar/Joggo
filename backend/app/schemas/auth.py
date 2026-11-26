@@ -25,6 +25,10 @@ class AuthUserResponse(BaseModel):
     id: uuid.UUID
     email: str
     full_name: str
+    age: int | None = None
+    designation: str | None = None
+    hospital_name: str | None = None
+    avatar_data_url: str | None = None
     role: str
     status: str
     restricted_reason: str | None

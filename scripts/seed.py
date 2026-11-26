@@ -27,8 +27,8 @@ def seed_users(db: Session, settings: Settings | None = None) -> int:
     """Create configured seed users if absent. Returns number of newly created users."""
     cfg = settings or get_settings()
     candidates: list[tuple[str, str, str, UserRole]] = [
-        (cfg.ADMIN_SEED_EMAIL, cfg.ADMIN_SEED_PASSWORD, "ClinicShield Admin", UserRole.admin),
-        (cfg.AUDITOR_SEED_EMAIL, cfg.AUDITOR_SEED_PASSWORD, "ClinicShield Auditor", UserRole.auditor),
+        (cfg.ADMIN_SEED_EMAIL, cfg.ADMIN_SEED_PASSWORD, "JOGGO Admin", UserRole.admin),
+        (cfg.AUDITOR_SEED_EMAIL, cfg.AUDITOR_SEED_PASSWORD, "JOGGO Auditor", UserRole.auditor),
         (cfg.DOCTOR_SEED_EMAIL, cfg.DOCTOR_SEED_PASSWORD, "Demo Clinician", UserRole.doctor),
     ]
 

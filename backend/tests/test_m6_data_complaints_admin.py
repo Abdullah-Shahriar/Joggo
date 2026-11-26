@@ -144,6 +144,8 @@ def test_documents_query_filters_sorting_pagination_and_dashboard(app: FastAPI) 
         assert dbody["blocked_count"] == 1
         assert dbody["processed_last_7_days"] == 2
         assert len(dbody["recent_documents"]) == 3
+        assert len(dbody["activity_heatmap"]) == 91
+        assert sum(day["documents_uploaded"] for day in dbody["activity_heatmap"]) >= 3
     finally:
         c_doc.__exit__(None, None, None)
 

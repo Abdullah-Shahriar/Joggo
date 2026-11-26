@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Download, HelpCircle, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowDownCircle, Check, Copy, Download, HelpCircle, Trash2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
@@ -16,6 +16,7 @@ import type {
   DocumentDetail,
   DocumentResultResponse,
   OriginalTextResponse,
+  SafetyFindingView,
   SanitizedTextResponse,
 } from "@/lib/types";
 
@@ -32,7 +33,14 @@ const MARK_TYPES = [
   { value: "OTHER", label: "Other" },
 ] as const;
 
-const TRACKER_STAGES = ["Extract", "Detect", "Tokenize", "Safety", "Review", "Generate"];
+const TRACKER_STAGES = [
+  { key: "extract", label: "Extract" },
+  { key: "detect", label: "Detect" },
+  { key: "tokenize", label: "Tokenize" },
+  { key: "safety", label: "Safety" },
+  { key: "review", label: "Review" },
+  { key: "generate", label: "Generate" },
+];
 
 const TOKEN_SPLIT_RE =
   /(\[(?:PATIENT|DOCTOR|PERSON|PHONE|EMAIL|ID|MRN|LOCATION|FACILITY|URL|IP|OTHER|DAY)_[A-Z0-9?-]+\]|\bAge\s+(?:\d{1,2}|90\+)|\b90\+\s+years)/g;
@@ -75,34 +83,70 @@ function renderHighlightedOriginal(
   );
 }
 
-function renderTokenizedText(text: string, jumpOffset: number | null) {
-  const segments = text.split(TOKEN_SPLIT_RE);
-  let offset = 0;
+function renderTokensInLine(lineText: string) {
+  const segments = lineText.split(TOKEN_SPLIT_RE);
   return segments.map((seg, idx) => {
-    const start = offset;
-    offset += seg.length;
     const isToken = TOKEN_SPLIT_RE.test(seg);
     TOKEN_SPLIT_RE.lastIndex = 0;
-    const isJumpTarget = jumpOffset !== null && jumpOffset >= start && jumpOffset < offset;
-
     if (isToken) {
       return (
         <span
-          key={`${idx}-${start}`}
+          key={idx}
           className="rounded bg-accent-tint px-1 font-medium text-accent"
         >
           {seg}
         </span>
       );
     }
-    if (isJumpTarget) {
-      return (
-        <mark key={`${idx}-${start}`} id="safety-jump-target" className="rounded bg-danger-tint px-0.5 text-danger">
-          {seg}
-        </mark>
-      );
-    }
-    return <Fragment key={`${idx}-${start}`}>{seg}</Fragment>;
+    return <Fragment key={idx}>{seg}</Fragment>;
+  });
+}
+
+function renderModifiedLines(
+  text: string,
+  findings: SafetyFindingView[],
+  activeJumpIdx: number | null,
+) {
+  const rawLines = text.split("\n");
+  let cursor = 0;
+
+  return rawLines.map((line, lineIdx) => {
+    const lineStart = cursor;
+    const lineEnd = lineStart + line.length;
+    cursor = lineEnd + 1;
+
+    const matchingFindings = findings
+      .map((f, fIdx) => ({ f, fIdx }))
+      .filter(({ f }) => f.start <= lineEnd && f.end >= lineStart);
+    const hasIssue = matchingFindings.length > 0;
+    const isActiveJump =
+      activeJumpIdx !== null && matchingFindings.some(({ fIdx }) => fIdx === activeJumpIdx);
+    const primaryFindingIdx = hasIssue ? matchingFindings[0].fIdx : null;
+
+    return (
+      <div
+        key={lineIdx}
+        id={primaryFindingIdx !== null ? `safety-issue-${primaryFindingIdx}` : undefined}
+        className={
+          hasIssue
+            ? `my-1 rounded-r border-l-4 border-danger bg-danger-tint px-3 py-1.5 text-danger ${
+                isActiveJump ? "ring-2 ring-danger ring-offset-1" : ""
+              }`
+            : "min-h-[1.5em]"
+        }
+      >
+        {hasIssue ? (
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <span className="font-medium text-danger">{renderTokensInLine(line || " ")}</span>
+            <span className="shrink-0 rounded bg-bg px-1.5 py-0.5 text-[11px] font-semibold text-danger">
+              Issue: {matchingFindings[0].f.type}
+            </span>
+          </div>
+        ) : (
+          <span>{line ? renderTokensInLine(line) : "\u00A0"}</span>
+        )}
+      </div>
+    );
   });
 }
 
@@ -112,15 +156,15 @@ function DocumentReviewContent() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [mobileTab, setMobileTab] = useState<"original" | "cleaned" | "result">("cleaned");
+  const [mobileTab, setMobileTab] = useState<"cleaned" | "original" | "result">("cleaned");
   const [originalTab, setOriginalTab] = useState<"text" | "pdf">("text");
   const [showWhy, setShowWhy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
-  const [jumpOffset, setJumpOffset] = useState<number | null>(null);
+  const [activeFindingIdx, setActiveFindingIdx] = useState<number | null>(null);
 
-  // Highlight-to-tokenize selection state
+  const resultSectionRef = useRef<HTMLElement>(null);
   const cleanedRef = useRef<HTMLDivElement>(null);
   const [selectedText, setSelectedText] = useState<string>("");
   const [markType, setMarkType] = useState<string>("PATIENT");
@@ -137,9 +181,7 @@ function DocumentReviewContent() {
     },
   });
 
-  const canLoadText = Boolean(
-    doc && !["UPLOADED", "PROCESSING"].includes(doc.status),
-  );
+  const canLoadText = Boolean(doc && !["UPLOADED", "PROCESSING"].includes(doc.status));
 
   const { data: originalData, isLoading: origLoading } = useQuery<OriginalTextResponse | null>({
     queryKey: ["document", docId, "original-text", doc?.version],
@@ -175,7 +217,6 @@ function DocumentReviewContent() {
     enabled: doc?.status === "COMPLETED",
   });
 
-  // Load PDF blob only when user switches to PDF preview tab and vault is alive
   useEffect(() => {
     let active = true;
     let objectUrl: string | null = null;
@@ -212,6 +253,7 @@ function DocumentReviewContent() {
     },
     onSuccess: () => {
       setSelectedText("");
+      setActiveFindingIdx(null);
       emitToast({ kind: "success", message: "Marked and replaced everywhere." });
       queryClient.invalidateQueries({ queryKey: ["document", docId] });
     },
@@ -238,6 +280,9 @@ function DocumentReviewContent() {
     onSuccess: () => {
       setMobileTab("result");
       queryClient.invalidateQueries({ queryKey: ["document", docId] });
+      setTimeout(() => {
+        resultSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
     },
   });
 
@@ -255,6 +300,22 @@ function DocumentReviewContent() {
       router.replace("/documents");
     },
   });
+
+  const jumpToIssue = (idx: number) => {
+    setMobileTab("cleaned");
+    setActiveFindingIdx(idx);
+    setTimeout(() => {
+      const target = document.getElementById(`safety-issue-${idx}`);
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+  };
+
+  const handleCycleJump = () => {
+    const findings = sanitizedData?.findings || [];
+    if (findings.length === 0) return;
+    const nextIdx = activeFindingIdx === null ? 0 : (activeFindingIdx + 1) % findings.length;
+    jumpToIssue(nextIdx);
+  };
 
   const handleCleanedMouseUp = () => {
     if (!doc || doc.vault_expired || !["BLOCKED", "REVIEW_REQUIRED", "APPROVED"].includes(doc.status)) {
@@ -289,14 +350,16 @@ function DocumentReviewContent() {
     emitToast({ kind: "success", message: "Copied to clipboard." });
   };
 
-  const activeStageIndex = useMemo(() => {
-    if (!doc) return 0;
-    if (doc.status === "COMPLETED") return 6;
-    if (doc.status === "SENDING" || doc.status === "LLM_FAILED") return 5;
-    if (doc.status === "APPROVED" || doc.status === "REVIEW_REQUIRED" || doc.status === "BLOCKED") {
-      return 4;
-    }
-    return 1;
+  const { currentStageIdx, stageError } = useMemo(() => {
+    if (!doc) return { currentStageIdx: 0, stageError: false };
+    if (doc.status === "COMPLETED") return { currentStageIdx: 6, stageError: false };
+    if (doc.status === "SENDING") return { currentStageIdx: 5, stageError: false };
+    if (doc.status === "LLM_FAILED") return { currentStageIdx: 5, stageError: true };
+    if (doc.status === "APPROVED") return { currentStageIdx: 5, stageError: false };
+    if (doc.status === "REVIEW_REQUIRED") return { currentStageIdx: 4, stageError: false };
+    if (doc.status === "BLOCKED") return { currentStageIdx: 3, stageError: true };
+    if (doc.status === "FAILED") return { currentStageIdx: 1, stageError: true };
+    return { currentStageIdx: 1, stageError: false };
   }, [doc]);
 
   if (isLoading) {
@@ -314,6 +377,8 @@ function DocumentReviewContent() {
     );
   }
 
+  const findings = sanitizedData?.findings || [];
+  const hasSafetyIssues = findings.length > 0;
   const safetyPass = doc.safety_report?.status === "PASS";
   const vaultExpiredBeforeApproval =
     doc.vault_expired && ["BLOCKED", "REVIEW_REQUIRED", "APPROVED", "FAILED"].includes(doc.status);
@@ -323,12 +388,17 @@ function DocumentReviewContent() {
     (doc.status === "REVIEW_REQUIRED" || doc.status === "APPROVED") &&
     Boolean(sanitizedData?.sanitized_sha256);
 
+  const currentStageLabel =
+    currentStageIdx < TRACKER_STAGES.length ? TRACKER_STAGES[currentStageIdx].label : "Complete";
+  const nextStageLabel =
+    currentStageIdx + 1 < TRACKER_STAGES.length ? TRACKER_STAGES[currentStageIdx + 1].label : null;
+
   return (
-    <div className="pb-20">
+    <div className="pb-24">
       {/* Header row */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-xl font-semibold text-text">{doc.original_filename}</h1>
+          <h1 className="text-2xl font-semibold text-text">{doc.original_filename}</h1>
           <DocumentStatusBadge status={doc.status} />
         </div>
         <Button variant="secondary" size="sm" onClick={() => setShowWhy((v) => !v)}>
@@ -337,43 +407,88 @@ function DocumentReviewContent() {
         </Button>
       </div>
 
-      {/* Thin step tracker */}
-      <ol aria-label="Document stages" className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-        {TRACKER_STAGES.map((label, idx) => {
-          const done = idx < activeStageIndex;
-          const current = idx === activeStageIndex;
-          return (
-            <li key={label} className="flex items-center gap-2">
-              <span
-                className={
-                  done
-                    ? "font-medium text-accent"
+      {/* High-visibility Step Progression Indicator */}
+      <section
+        aria-label="Document processing progress"
+        className="mt-5 rounded border border-border bg-bg-subtle p-4"
+      >
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="font-semibold text-text">
+            Current step:{" "}
+            <span className={stageError ? "text-danger" : "text-accent"}>{currentStageLabel}</span>
+          </span>
+          {nextStageLabel && (
+            <span className="text-text-muted">
+              Next step: <strong className="font-medium text-text">{nextStageLabel}</strong>
+            </span>
+          )}
+        </div>
+
+        <ol className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          {TRACKER_STAGES.map((stage, idx) => {
+            const done = idx < currentStageIdx;
+            const current = idx === currentStageIdx;
+            const next = idx === currentStageIdx + 1;
+            const errored = current && stageError;
+
+            return (
+              <li
+                key={stage.key}
+                aria-current={current ? "step" : undefined}
+                className={`flex items-center gap-2.5 rounded border px-3 py-2 text-xs ${
+                  errored
+                    ? "border-danger bg-danger-tint text-danger"
                     : current
-                      ? "font-semibold text-text"
-                      : "text-text-muted"
-                }
+                      ? "border-accent bg-bg font-semibold text-accent shadow-sm"
+                      : done
+                        ? "border-accent/30 bg-accent-tint/70 text-accent"
+                        : next
+                          ? "border-[#D1D5DB] bg-bg text-text"
+                          : "border-border bg-bg text-text-muted"
+                }`}
               >
-                {label}
-              </span>
-              {idx < TRACKER_STAGES.length - 1 && (
-                <span aria-hidden="true" className="text-border">
-                  ·
+                <span
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+                    errored
+                      ? "bg-danger text-white"
+                      : done
+                        ? "bg-accent text-white"
+                        : current
+                          ? "bg-accent text-white"
+                          : "bg-bg-subtle text-text-muted"
+                  }`}
+                >
+                  {done ? <Check className="h-3.5 w-3.5" /> : idx + 1}
                 </span>
-              )}
-            </li>
-          );
-        })}
-      </ol>
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{stage.label}</p>
+                  {current && (
+                    <p className="text-[10px] uppercase tracking-wide">
+                      {errored ? "Action needed" : "Active"}
+                    </p>
+                  )}
+                  {next && !errored && (
+                    <p className="text-[10px] uppercase tracking-wide text-text-muted">Next</p>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
 
       {/* Banners */}
       {vaultExpiredBeforeApproval && (
-        <div role="alert" className="mt-4 rounded bg-danger-tint px-4 py-3 text-sm text-danger">
+        <div role="alert" className="mt-4 rounded border border-danger bg-danger-tint px-4 py-3 text-[15px] text-danger">
           Session data expired. Upload the file again.
         </div>
       )}
 
       {doc.status === "FAILED" && (
-        <div role="alert" className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded bg-danger-tint px-4 py-3 text-sm text-danger">
+        <div
+          role="alert"
+          className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded border border-danger bg-danger-tint px-4 py-3 text-[15px] text-danger"
+        >
           <span>Document processing failed ({doc.failure_code || "ERROR"}).</span>
           {!doc.vault_expired && (
             <Button
@@ -391,39 +506,61 @@ function DocumentReviewContent() {
       {doc.safety_report && (
         <div className="mt-4" aria-live="polite">
           {doc.safety_report.status === "PASS" ? (
-            <p className="text-sm font-medium text-accent">
+            <p className="text-[15px] font-medium text-accent">
               Safety check passed
               {doc.safety_report.warnings?.includes("NO_ENTITIES_FOUND")
                 ? " — no identifiers were detected; please review carefully."
                 : ""}
             </p>
           ) : (
-            <div role="alert" className="rounded bg-danger-tint p-4 text-sm text-danger">
-              <p className="font-medium">
-                Safety check blocked sending. Highlight the text and replace it to continue.
-              </p>
-              {sanitizedData && sanitizedData.findings.length > 0 && (
-                <ul className="mt-2 space-y-1 text-xs">
-                  {sanitizedData.findings.map((f, i) => (
-                    <li key={`${f.start}-${i}`} className="flex flex-wrap items-center gap-2">
+            <div
+              role="alert"
+              className="rounded border-2 border-danger bg-danger-tint p-4 text-[15px] text-danger"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 font-semibold">
+                  <AlertTriangle className="h-5 w-5 shrink-0" aria-hidden="true" />
+                  <span>
+                    Safety check blocked sending ({findings.length} issue
+                    {findings.length === 1 ? "" : "s"} found). Highlight red lines on the left and
+                    replace them to continue.
+                  </span>
+                </div>
+
+                {hasSafetyIssues && (
+                  <button
+                    type="button"
+                    onClick={handleCycleJump}
+                    className="inline-flex h-10 items-center gap-2 rounded border-2 border-danger bg-bg px-4 text-sm font-semibold text-danger hover:bg-danger hover:text-white"
+                  >
+                    <ArrowDownCircle className="h-4 w-4" aria-hidden="true" />
+                    <span>
+                      Jump to issue{" "}
+                      {activeFindingIdx !== null
+                        ? `(${((activeFindingIdx + 1) % findings.length) + 1}/${findings.length})`
+                        : `(1/${findings.length})`}
+                    </span>
+                  </button>
+                )}
+              </div>
+
+              {hasSafetyIssues && (
+                <ul className="mt-3 space-y-2 border-t border-danger/20 pt-3 text-sm">
+                  {findings.map((f, i) => (
+                    <li
+                      key={`${f.start}-${i}`}
+                      className="flex flex-wrap items-center justify-between gap-2"
+                    >
                       <span>
-                        {f.type}: {f.reason}
+                        <strong>{f.type}:</strong> {f.reason}
                         {f.snippet ? ` ("${f.snippet}")` : ""}
                       </span>
                       <button
                         type="button"
-                        onClick={() => {
-                          setMobileTab("cleaned");
-                          setJumpOffset(f.start);
-                          setTimeout(() => {
-                            document
-                              .getElementById("safety-jump-target")
-                              ?.scrollIntoView({ behavior: "smooth", block: "center" });
-                          }, 50);
-                        }}
-                        className="font-medium text-accent underline"
+                        onClick={() => jumpToIssue(i)}
+                        className="inline-flex h-8 items-center gap-1 rounded border border-danger bg-bg px-3 text-xs font-semibold text-danger hover:bg-danger hover:text-white"
                       >
-                        Jump to
+                        Jump to line
                       </button>
                     </li>
                   ))}
@@ -437,14 +574,16 @@ function DocumentReviewContent() {
       {/* Explainability panel (A02) */}
       {showWhy && (
         <section className="mt-4 rounded border border-border bg-bg p-4">
-          <h2 className="text-sm font-semibold text-text">Why was this replaced?</h2>
+          <h2 className="text-base font-semibold text-text">Why was this replaced?</h2>
           {doc.entities.length === 0 ? (
-            <p className="mt-2 text-xs text-text-muted">No placeholders recorded for this document.</p>
+            <p className="mt-2 text-sm text-text-muted">
+              No placeholders recorded for this document.
+            </p>
           ) : (
             <div className="mt-3 overflow-x-auto">
-              <table aria-label="Replacement explanations" className="w-full border-collapse text-left text-xs">
+              <table aria-label="Replacement explanations" className="w-full border-collapse text-left text-sm">
                 <thead>
-                  <tr className="border-y border-border bg-bg-subtle text-text-muted">
+                  <tr className="border-y border-border bg-bg-subtle text-xs text-text-muted">
                     <th className="px-2 py-2">Token</th>
                     <th className="px-2 py-2">Type</th>
                     <th className="px-2 py-2">Reason</th>
@@ -469,102 +608,61 @@ function DocumentReviewContent() {
 
       {/* Mobile pane tabs (< 1024px) */}
       <div className="mt-6 flex border-b border-border lg:hidden" role="tablist">
-        {(["original", "cleaned", "result"] as const).map((tab) => (
+        {(
+          [
+            { id: "cleaned", label: "Modified" },
+            { id: "original", label: "Original" },
+            { id: "result", label: "Result" },
+          ] as const
+        ).map((tab) => (
           <button
-            key={tab}
+            key={tab.id}
             type="button"
             role="tab"
-            aria-selected={mobileTab === tab}
-            onClick={() => setMobileTab(tab)}
-            className={`flex-1 border-b-2 py-2.5 text-sm font-medium capitalize ${
-              mobileTab === tab ? "border-accent text-accent" : "border-transparent text-text-muted"
+            aria-selected={mobileTab === tab.id}
+            onClick={() => setMobileTab(tab.id)}
+            className={`flex-1 border-b-2 py-2.5 text-sm font-medium ${
+              mobileTab === tab.id
+                ? "border-accent text-accent"
+                : "border-transparent text-text-muted"
             }`}
           >
-            {tab}
+            {tab.label}
           </button>
         ))}
       </div>
 
-      {/* Three bordered panes on desktop */}
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Pane 1: Original */}
+      {/* 50/50 Split View: Left = Modified/Cleaned version, Right = Original/Current document */}
+      <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+        {/* Left 50%: Modified / Cleaned version */}
         <section
-          className={`flex h-[560px] flex-col rounded border border-border bg-bg ${
-            mobileTab === "original" ? "flex" : "hidden lg:flex"
-          }`}
+          aria-label="Modified cleaned document"
+          className={`flex h-[600px] flex-col rounded border bg-bg ${
+            hasSafetyIssues ? "border-danger" : "border-border"
+          } ${mobileTab === "cleaned" ? "flex" : "hidden lg:flex"}`}
         >
-          <div className="flex items-center justify-between border-b border-border bg-bg-subtle px-3 py-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-              Original
-            </h2>
-            <div className="flex gap-1 text-xs">
-              <button
-                type="button"
-                onClick={() => setOriginalTab("text")}
-                className={`rounded px-2 py-1 ${
-                  originalTab === "text" ? "bg-bg font-medium text-accent" : "text-text-muted"
-                }`}
-              >
-                Text
-              </button>
-              <button
-                type="button"
-                onClick={() => setOriginalTab("pdf")}
-                className={`rounded px-2 py-1 ${
-                  originalTab === "pdf" ? "bg-bg font-medium text-accent" : "text-text-muted"
-                }`}
-              >
-                PDF preview
-              </button>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-bg-subtle px-4 py-2.5">
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-text">
+                Modified version (Cleaned)
+              </h2>
+              <p className="text-xs text-text-muted">Highlight any remaining text to replace it</p>
             </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 text-sm leading-relaxed">
-            {doc.vault_expired ? (
-              <p className="text-xs text-text-muted">
-                Original details have expired and were removed from temporary memory.
-              </p>
-            ) : originalTab === "pdf" ? (
-              pdfLoading ? (
-                <PaneSkeleton />
-              ) : pdfUrl ? (
-                <iframe
-                  title="Original PDF preview"
-                  src={pdfUrl}
-                  className="h-full w-full border-0"
-                />
-              ) : (
-                <p className="text-xs text-text-muted">PDF preview unavailable.</p>
-              )
-            ) : origLoading ? (
-              <PaneSkeleton />
-            ) : originalData ? (
-              <div className="whitespace-pre-wrap break-words font-sans text-text">
-                {renderHighlightedOriginal(originalData.original_text, originalData.highlights)}
-              </div>
-            ) : (
-              <p className="text-xs text-text-muted">Original text unavailable.</p>
+            {hasSafetyIssues && (
+              <button
+                type="button"
+                onClick={handleCycleJump}
+                className="inline-flex h-9 items-center gap-1.5 rounded border-2 border-danger bg-bg px-3.5 text-xs font-semibold text-danger hover:bg-danger hover:text-white"
+              >
+                <ArrowDownCircle className="h-4 w-4" aria-hidden="true" />
+                <span>Jump to red issue ({findings.length})</span>
+              </button>
             )}
           </div>
-        </section>
 
-        {/* Pane 2: Cleaned text + highlight-to-tokenize */}
-        <section
-          className={`flex h-[560px] flex-col rounded border border-border bg-bg ${
-            mobileTab === "cleaned" ? "flex" : "hidden lg:flex"
-          }`}
-        >
-          <div className="flex items-center justify-between border-b border-border bg-bg-subtle px-3 py-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-              Cleaned text
-            </h2>
-            <span className="text-[11px] text-text-muted">Select text to replace</span>
-          </div>
-
-          {/* Highlight-to-tokenize bar when selection active */}
           {selectedText && (
-            <div className="flex flex-wrap items-center gap-2 border-b border-border bg-accent-tint px-3 py-2 text-xs">
-              <span className="max-w-[140px] truncate font-medium text-text" title={selectedText}>
+            <div className="flex flex-wrap items-center gap-2 border-b border-border bg-accent-tint px-4 py-2.5 text-xs">
+              <span className="max-w-[180px] truncate font-semibold text-text" title={selectedText}>
                 Mark &ldquo;{selectedText}&rdquo; as
               </span>
               <select
@@ -584,7 +682,7 @@ function DocumentReviewContent() {
                 loading={markMutation.isPending}
                 onClick={() => markMutation.mutate()}
               >
-                Replace
+                Replace everywhere
               </Button>
             </div>
           )}
@@ -592,103 +690,174 @@ function DocumentReviewContent() {
           <div
             ref={cleanedRef}
             onMouseUp={handleCleanedMouseUp}
-            className="flex-1 overflow-y-auto p-4 text-sm leading-relaxed"
+            className="flex-1 overflow-y-auto p-5 text-[15px] leading-relaxed text-text"
           >
             {sanLoading ? (
               <PaneSkeleton />
             ) : sanitizedData ? (
-              <div className="whitespace-pre-wrap break-words text-text">
-                {renderTokenizedText(sanitizedData.sanitized_text, jumpOffset)}
+              <div className="break-words font-sans">
+                {renderModifiedLines(sanitizedData.sanitized_text, findings, activeFindingIdx)}
               </div>
             ) : (
-              <p className="text-xs text-text-muted">Cleaned text is not available.</p>
+              <p className="text-sm text-text-muted">Cleaned text is not available.</p>
             )}
           </div>
         </section>
 
-        {/* Pane 3: Result */}
+        {/* Right 50%: Original / Current document */}
         <section
-          className={`flex h-[560px] flex-col rounded border border-border bg-bg ${
-            mobileTab === "result" ? "flex" : "hidden lg:flex"
+          aria-label="Original document"
+          className={`flex h-[600px] flex-col rounded border border-border bg-bg ${
+            mobileTab === "original" ? "flex" : "hidden lg:flex"
           }`}
         >
-          <div className="flex items-center justify-between border-b border-border bg-bg-subtle px-3 py-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-              Result
-            </h2>
-            {doc.status === "COMPLETED" && resultData && (
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="sm" onClick={handleCopy}>
-                  <Copy className="h-3.5 w-3.5" />
-                  Copy
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => handleExport("txt")}>
-                  <Download className="h-3.5 w-3.5" />
-                  .txt
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => handleExport("docx")}>
-                  <Download className="h-3.5 w-3.5" />
-                  .docx
-                </Button>
-              </div>
-            )}
+          <div className="flex items-center justify-between border-b border-border bg-bg-subtle px-4 py-2.5">
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-text">
+                Original document
+              </h2>
+              <p className="text-xs text-text-muted">Kept in temporary encrypted memory only</p>
+            </div>
+            <div className="flex gap-1 text-xs">
+              <button
+                type="button"
+                onClick={() => setOriginalTab("text")}
+                className={`rounded px-2.5 py-1.5 ${
+                  originalTab === "text"
+                    ? "bg-bg font-semibold text-accent shadow-sm"
+                    : "text-text-muted hover:text-text"
+                }`}
+              >
+                Text
+              </button>
+              <button
+                type="button"
+                onClick={() => setOriginalTab("pdf")}
+                className={`rounded px-2.5 py-1.5 ${
+                  originalTab === "pdf"
+                    ? "bg-bg font-semibold text-accent shadow-sm"
+                    : "text-text-muted hover:text-text"
+                }`}
+              >
+                PDF preview
+              </button>
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 text-sm leading-relaxed">
-            {doc.status === "SENDING" ? (
-              <BrandLoader label="Generating draft…" />
-            ) : doc.status === "LLM_FAILED" ? (
-              <div role="alert" className="rounded bg-danger-tint p-4 text-sm text-danger">
-                <p>Could not generate a draft.</p>
-                <div className="mt-3">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    loading={retryMutation.isPending}
-                    onClick={() => retryMutation.mutate()}
-                  >
-                    Try again
-                  </Button>
-                </div>
-              </div>
-            ) : doc.status === "COMPLETED" && resultData ? (
-              <div>
-                {resultData.fallback_used && (
-                  <p className="mb-3 rounded bg-bg-subtle px-3 py-2 text-xs text-text-muted">
-                    Switched to backup provider ({resultData.llm_provider_used}).
-                  </p>
-                )}
-                {resultData.vault_expired && (
-                  <p className="mb-3 rounded bg-bg-subtle px-3 py-2 text-xs text-text-muted">
-                    Original details have expired, showing placeholders only.
-                  </p>
-                )}
-                {resultData.warnings.length > 0 && (
-                  <p className="mb-3 rounded bg-bg-subtle px-3 py-2 text-xs text-text-muted">
-                    Unrecognized placeholders left as written:{" "}
-                    {resultData.warnings.map((w) => w.token).join(", ")}
-                  </p>
-                )}
-                <div className="whitespace-pre-wrap break-words text-text">{resultData.text}</div>
+          <div className="flex-1 overflow-y-auto p-5 text-[15px] leading-relaxed">
+            {doc.vault_expired ? (
+              <p className="text-sm text-text-muted">
+                Original details have expired and were removed from temporary memory.
+              </p>
+            ) : originalTab === "pdf" ? (
+              pdfLoading ? (
+                <PaneSkeleton />
+              ) : pdfUrl ? (
+                <iframe
+                  title="Original PDF preview"
+                  src={pdfUrl}
+                  className="h-full w-full border-0"
+                />
+              ) : (
+                <p className="text-sm text-text-muted">PDF preview unavailable.</p>
+              )
+            ) : origLoading ? (
+              <PaneSkeleton />
+            ) : originalData ? (
+              <div className="whitespace-pre-wrap break-words font-sans text-text">
+                {renderHighlightedOriginal(originalData.original_text, originalData.highlights)}
               </div>
             ) : (
-              <p className="text-xs text-text-muted">
-                Review the cleaned text and press &ldquo;Approve and generate&rdquo; to create the
-                draft.
-              </p>
+              <p className="text-sm text-text-muted">Original text unavailable.</p>
             )}
           </div>
         </section>
       </div>
 
+      {/* Dedicated Full-Width Generated Result Section below 50/50 split */}
+      <section
+        ref={resultSectionRef}
+        aria-label="Generated draft result"
+        className={`mt-6 rounded border border-border bg-bg ${
+          mobileTab === "result" ? "block" : "hidden lg:block"
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-bg-subtle px-4 py-3">
+          <div>
+            <h2 className="text-sm font-semibold text-text">Generated draft</h2>
+            <p className="text-xs text-text-muted">
+              Only the sanitized text on the left is sent to the AI; real details are restored
+              locally here.
+            </p>
+          </div>
+          {doc.status === "COMPLETED" && resultData && (
+            <div className="flex items-center gap-1.5">
+              <Button variant="secondary" size="sm" onClick={handleCopy}>
+                <Copy className="h-3.5 w-3.5" />
+                Copy
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => handleExport("txt")}>
+                <Download className="h-3.5 w-3.5" />
+                Download .txt
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => handleExport("docx")}>
+                <Download className="h-3.5 w-3.5" />
+                Download .docx
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div className="p-5 text-[15px] leading-relaxed">
+          {doc.status === "SENDING" ? (
+            <BrandLoader label="Generating clinical draft (Step 6 of 6)…" />
+          ) : doc.status === "LLM_FAILED" ? (
+            <div role="alert" className="rounded bg-danger-tint p-4 text-sm text-danger">
+              <p className="font-medium">Could not generate a draft.</p>
+              <div className="mt-3">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={retryMutation.isPending}
+                  onClick={() => retryMutation.mutate()}
+                >
+                  Try again
+                </Button>
+              </div>
+            </div>
+          ) : doc.status === "COMPLETED" && resultData ? (
+            <div>
+              {resultData.fallback_used && (
+                <p className="mb-3 rounded bg-bg-subtle px-3 py-2 text-xs text-text-muted">
+                  Switched to backup provider ({resultData.llm_provider_used}).
+                </p>
+              )}
+              {resultData.vault_expired && (
+                <p className="mb-3 rounded bg-bg-subtle px-3 py-2 text-xs text-text-muted">
+                  Original details have expired, showing placeholders only.
+                </p>
+              )}
+              {resultData.warnings.length > 0 && (
+                <p className="mb-3 rounded bg-bg-subtle px-3 py-2 text-xs text-text-muted">
+                  Unrecognized placeholders left as written:{" "}
+                  {resultData.warnings.map((w) => w.token).join(", ")}
+                </p>
+              )}
+              <div className="whitespace-pre-wrap break-words text-text">{resultData.text}</div>
+            </div>
+          ) : (
+            <p className="text-sm text-text-muted">
+              Review the modified text on the left against the original document on the right, then
+              press &ldquo;Approve and generate&rdquo; below.
+            </p>
+          )}
+        </div>
+      </section>
+
       {/* Sticky bottom action bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-bg py-3">
+      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-[#D1D5DB] bg-bg py-3 shadow-[0_-1px_4px_rgba(17,24,39,0.06)]">
         <div className="mx-auto flex max-w-app items-center justify-between gap-3 px-4 sm:px-6">
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => setConfirmDelete(true)}
-          >
+          <Button variant="destructive" size="sm" onClick={() => setConfirmDelete(true)}>
             <Trash2 className="h-4 w-4" />
             Delete
           </Button>

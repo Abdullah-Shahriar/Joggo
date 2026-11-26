@@ -119,57 +119,107 @@ function NewDocumentContent() {
 
       {uploadedDocId ? (
         <section className="mt-8 rounded border border-border bg-bg p-6" aria-live="polite">
-          <h2 className="text-base font-semibold text-text">Cleaning your document</h2>
-          <p className="mt-1 text-xs text-text-muted">
-            Running local extraction, identifier detection, tokenization, and safety checks.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold text-text">Cleaning your document</h2>
+              <p className="mt-1 text-[15px] text-text-muted">
+                Running local extraction, identifier detection, tokenization, and safety checks.
+              </p>
+            </div>
+            <span className="rounded bg-accent-tint px-2.5 py-1 text-xs font-semibold text-accent">
+              Step{" "}
+              {Math.min(
+                LIVE_STEPS.length,
+                LIVE_STEPS.filter(
+                  (m) => liveDoc?.steps.find((s) => s.step === m.key)?.status === "succeeded",
+                ).length + 1,
+              )}{" "}
+              of {LIVE_STEPS.length}
+            </span>
+          </div>
+
           <ol className="mt-6 space-y-3">
-            {LIVE_STEPS.map((stepMeta) => {
+            {LIVE_STEPS.map((stepMeta, idx) => {
               const stepRow = liveDoc?.steps.find((s) => s.step === stepMeta.key);
               const status = stepRow?.status || "pending";
+              const prevDone =
+                idx === 0 ||
+                liveDoc?.steps.find((s) => s.step === LIVE_STEPS[idx - 1].key)?.status === "succeeded";
+              const isCurrent = status === "running" || (status === "pending" && prevDone);
+              const isNext =
+                status === "pending" &&
+                idx > 0 &&
+                (liveDoc?.steps.find((s) => s.step === LIVE_STEPS[idx - 1].key)?.status === "running" ||
+                  (idx === 1 && liveDoc?.steps.find((s) => s.step === LIVE_STEPS[0].key)?.status === "pending"));
+
               return (
-                <li key={stepMeta.key} className="flex items-center gap-3 text-sm">
-                  {status === "succeeded" ? (
-                    <svg
-                      aria-hidden="true"
-                      className="h-4 w-4 text-accent"
-                      viewBox="0 0 16 16"
-                      fill="none"
+                <li
+                  key={stepMeta.key}
+                  className={`flex items-center justify-between gap-3 rounded border px-4 py-3 text-sm ${
+                    status === "failed"
+                      ? "border-danger bg-danger-tint"
+                      : isCurrent
+                        ? "border-accent bg-accent-tint/60"
+                        : "border-border bg-bg"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                        status === "succeeded"
+                          ? "bg-accent text-white"
+                          : status === "failed"
+                            ? "bg-danger text-white"
+                            : isCurrent
+                              ? "border-2 border-accent bg-bg text-accent"
+                              : "border border-border bg-bg-subtle text-text-muted"
+                      }`}
                     >
-                      <path
-                        className="cs-check-draw"
-                        d="M3 8.5L6.5 12L13 4.5"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  ) : status === "running" ? (
-                    <svg
-                      aria-hidden="true"
-                      className="cs-spinner h-4 w-4 text-accent"
-                      viewBox="0 0 16 16"
-                      fill="none"
+                      {status === "succeeded" ? (
+                        <svg aria-hidden="true" className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none">
+                          <path
+                            className="cs-check-draw"
+                            d="M3 8.5L6.5 12L13 4.5"
+                            stroke="currentColor"
+                            strokeWidth="2.2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      ) : status === "running" ? (
+                        <svg aria-hidden="true" className="cs-spinner h-3.5 w-3.5" viewBox="0 0 16 16" fill="none">
+                          <circle cx="8" cy="8" r="6" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
+                          <path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                      ) : (
+                        idx + 1
+                      )}
+                    </span>
+                    <span
+                      className={
+                        status === "failed"
+                          ? "font-semibold text-danger"
+                          : isCurrent || status === "succeeded"
+                            ? "font-semibold text-text"
+                            : "text-text-muted"
+                      }
                     >
-                      <circle cx="8" cy="8" r="6" stroke="#E5E7EB" strokeWidth="2" />
-                      <path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                  ) : status === "failed" ? (
-                    <span className="h-2.5 w-2.5 rounded-full bg-danger" />
-                  ) : (
-                    <span className="h-2.5 w-2.5 rounded-full bg-border" />
-                  )}
-                  <span
-                    className={
-                      status === "succeeded" || status === "running"
-                        ? "font-medium text-text"
-                        : status === "failed"
-                          ? "font-medium text-danger"
-                          : "text-text-muted"
-                    }
-                  >
-                    {stepMeta.label}
+                      {stepMeta.label}
+                    </span>
+                  </div>
+
+                  <span className="text-xs font-medium">
+                    {status === "succeeded" ? (
+                      <span className="text-accent">Done</span>
+                    ) : status === "failed" ? (
+                      <span className="text-danger">Failed</span>
+                    ) : isCurrent ? (
+                      <span className="rounded bg-accent px-2 py-0.5 text-white">Current</span>
+                    ) : isNext ? (
+                      <span className="rounded bg-bg-subtle px-2 py-0.5 text-text-muted">Next</span>
+                    ) : (
+                      <span className="text-text-muted">Pending</span>
+                    )}
                   </span>
                 </li>
               );

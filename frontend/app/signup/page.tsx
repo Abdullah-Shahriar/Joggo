@@ -1,18 +1,18 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Check, Eye, EyeOff } from "lucide-react";
+import { Check, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { AuthSplitShell } from "@/components/auth/AuthSplitShell";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { BrandLoader } from "@/components/ui/BrandLoader";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/FormFields";
-import { Logo } from "@/components/ui/Logo";
 import { ApiError, apiRequest } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { getRoleHome } from "@/lib/constants";
@@ -80,118 +80,101 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-bg px-4 py-6">
-      <div className="mx-auto max-w-app">
-        <Link
-          href="/"
-          className="inline-flex h-10 items-center gap-2 rounded px-3 text-sm font-medium text-text hover:bg-bg-subtle"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span>Back to home</span>
-        </Link>
-      </div>
+    <AuthSplitShell>
+      <div className="rounded border border-border bg-bg p-6 sm:p-8">
+        <h1 className="text-2xl font-semibold text-text">Create an account</h1>
+        <p className="mt-1.5 text-[15px] text-text-muted">
+          Set up your clinician account to start testing with synthetic patient PDFs.
+        </p>
 
-      <main className="mx-auto mt-10 w-full max-w-[400px]">
-        <div className="mb-6 flex justify-center">
-          <Logo />
-        </div>
-
-        <div className="rounded border border-border bg-bg p-6">
-          <h1 className="text-xl font-semibold text-text">Create an account</h1>
-
-          {formError && (
-            <div role="alert" className="mt-4 rounded bg-danger-tint px-3 py-2.5 text-xs text-danger">
-              {formError}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit(onSubmit)} className="mt-5 space-y-4" noValidate>
-            <Input
-              id="signup-name"
-              label="Full name"
-              type="text"
-              autoComplete="name"
-              error={errors.full_name?.message}
-              {...register("full_name")}
-            />
-
-            <Input
-              id="signup-email"
-              label="Email"
-              type="email"
-              autoComplete="email"
-              error={errors.email?.message}
-              {...register("email")}
-            />
-
-            <div className="relative">
-              <Input
-                id="signup-password"
-                label="Password"
-                type={showPassword ? "text" : "password"}
-                autoComplete="new-password"
-                className="pr-10"
-                error={errors.password?.message}
-                {...register("password")}
-              />
-              <button
-                type="button"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-2.5 top-[29px] inline-flex h-7 w-7 items-center justify-center rounded text-text-muted hover:text-text"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-              <ul className="mt-2 space-y-1 text-xs">
-                {[
-                  { ok: hasLen, label: "At least 10 characters" },
-                  { ok: hasLetter, label: "At least one letter" },
-                  { ok: hasDigit, label: "At least one digit" },
-                ].map((rule) => (
-                  <li
-                    key={rule.label}
-                    className={`flex items-center gap-1.5 ${
-                      rule.ok ? "text-accent" : "text-text-muted"
-                    }`}
-                  >
-                    <Check className={`h-3.5 w-3.5 ${rule.ok ? "opacity-100" : "opacity-30"}`} />
-                    <span>{rule.label}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <Button type="submit" loading={isSubmitting} className="w-full">
-              Create account
-            </Button>
-          </form>
-
-          <div className="my-5 flex items-center gap-3 text-xs text-text-muted">
-            <div className="h-px flex-1 bg-border" />
-            <span>or</span>
-            <div className="h-px flex-1 bg-border" />
+        {formError && (
+          <div role="alert" className="mt-4 rounded bg-danger-tint px-3.5 py-2.5 text-sm text-danger">
+            {formError}
           </div>
+        )}
 
-          <GoogleSignInButton
-            onSuccess={(u) => {
-              setUser(u);
-              router.replace(getRoleHome(u.role));
-            }}
-            onError={(msg) => setFormError(msg)}
+        <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4" noValidate>
+          <Input
+            id="signup-name"
+            label="Full name"
+            type="text"
+            autoComplete="name"
+            error={errors.full_name?.message}
+            {...register("full_name")}
           />
 
-          <p className="mt-5 text-center text-xs text-text-muted">
-            Already have an account?{" "}
-            <Link href="/login" className="font-medium text-accent hover:underline">
-              Sign in
-            </Link>
-          </p>
+          <Input
+            id="signup-email"
+            label="Email"
+            type="email"
+            autoComplete="email"
+            error={errors.email?.message}
+            {...register("email")}
+          />
+
+          <div className="relative">
+            <Input
+              id="signup-password"
+              label="Password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="new-password"
+              className="pr-10"
+              error={errors.password?.message}
+              {...register("password")}
+            />
+            <button
+              type="button"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute right-2.5 top-[29px] inline-flex h-7 w-7 items-center justify-center rounded text-text-muted hover:text-text"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+            <ul className="mt-2 space-y-1 text-xs">
+              {[
+                { ok: hasLen, label: "At least 10 characters" },
+                { ok: hasLetter, label: "At least one letter" },
+                { ok: hasDigit, label: "At least one digit" },
+              ].map((rule) => (
+                <li
+                  key={rule.label}
+                  className={`flex items-center gap-1.5 ${
+                    rule.ok ? "text-accent" : "text-text-muted"
+                  }`}
+                >
+                  <Check className={`h-3.5 w-3.5 ${rule.ok ? "opacity-100" : "opacity-30"}`} />
+                  <span>{rule.label}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <Button type="submit" loading={isSubmitting} className="w-full">
+            Create account
+          </Button>
+        </form>
+
+        <div className="my-5 flex items-center gap-3 text-xs text-text-muted">
+          <div className="h-px flex-1 bg-border" />
+          <span>or</span>
+          <div className="h-px flex-1 bg-border" />
         </div>
 
-        <p className="mt-6 text-center text-xs text-text-muted">
-          Demo environment — use synthetic data only
+        <GoogleSignInButton
+          onSuccess={(u) => {
+            setUser(u);
+            router.replace(getRoleHome(u.role));
+          }}
+          onError={(msg) => setFormError(msg)}
+        />
+
+        <p className="mt-6 text-center text-sm text-text-muted">
+          Already have an account?{" "}
+          <Link href="/login" className="font-medium text-accent hover:underline">
+            Sign in
+          </Link>
         </p>
-      </main>
-    </div>
+      </div>
+    </AuthSplitShell>
   );
 }

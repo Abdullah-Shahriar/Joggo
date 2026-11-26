@@ -49,7 +49,7 @@ export function PublicLayout({
         Skip to main content
       </a>
 
-      <header className="sticky top-0 z-30 h-16 border-b border-border bg-bg">
+      <header className="sticky top-0 z-30 h-16 border-b border-[#D1D5DB] bg-bg shadow-[0_1px_4px_rgba(17,24,39,0.08)]">
         <div className="mx-auto flex h-full max-w-app items-center justify-between px-4 sm:px-6">
           <Link href="/" aria-label={`${APP_NAME} home`}>
             <Logo />

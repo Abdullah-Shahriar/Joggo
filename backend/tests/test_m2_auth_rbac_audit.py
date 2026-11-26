@@ -308,11 +308,28 @@ def test_me_profile_sessions_and_password_change(client: TestClient) -> None:
 
     patch_res = client.patch(
         "/api/me",
-        json={"full_name": "Dr Updated"},
+        json={
+            "full_name": "Dr Updated",
+            "age": 38,
+            "designation": "Senior Registrar",
+            "hospital_name": "City Care Medical College",
+            "avatar_data_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+        },
         headers=CSRF_HEADERS,
     )
     assert patch_res.status_code == 200
     assert patch_res.json()["full_name"] == "Dr Updated"
+    assert patch_res.json()["age"] == 38
+    assert patch_res.json()["designation"] == "Senior Registrar"
+    assert patch_res.json()["hospital_name"] == "City Care Medical College"
+    assert patch_res.json()["avatar_data_url"].startswith("data:image/png;base64,")
+
+    bad_avatar = client.patch(
+        "/api/me",
+        json={"avatar_data_url": "javascript:alert(1)"},
+        headers=CSRF_HEADERS,
+    )
+    assert bad_avatar.status_code == 422
 
     sess_res = client.get("/api/me/sessions")
     assert sess_res.status_code == 200

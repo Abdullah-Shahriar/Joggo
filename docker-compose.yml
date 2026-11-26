@@ -20,7 +20,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     environment:
-      APP_NAME: ${APP_NAME:-ClinicShield}
+      APP_NAME: ${APP_NAME:-JOGGO}
       ENV: ${ENV:-dev}
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://clinicshield:clinicshield@db:5432/clinicshield}
       JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-32-chars-minimum}

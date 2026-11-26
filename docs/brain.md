@@ -9,7 +9,7 @@ Read order each session: `brain.md` → `rules.md` → `architecture.md` → `de
 
 - Current milestone: **M10 (local/repo complete — ready for cloud deploy & video)**
 - Last updated: 2026-11-26
-- Last full test run: pass (36/36 backend pytest, 91% cov on fresh DB; frontend `next build`, `tsc --noEmit`, `next lint` 0 errors/warnings; secret/TODO scan 0 hits)
+- Last full test run: pass (36/36 backend pytest with migration 0002; frontend `next build`, `tsc --noEmit`, `next lint` 0 errors/warnings)
 - Blockers: Cloud hosting deploy (Render/Vercel env + live URL) and YouTube demo recording require user accounts.
 
 ## 2. Project summary
@@ -45,6 +45,7 @@ Read order each session: `brain.md` → `rules.md` → `architecture.md` → `de
 - 2026-11-26 (M0): Placed frontend `APP_NAME` constant in `frontend/lib/constants.ts`; `docker-compose.yml` provides local dev `${VAR:-default}` fallbacks so `docker compose up --build` succeeds directly from a clean clone without manual `.env` creation. Backend Dockerfile starts uvicorn directly in M0 (Alembic + seed command added in M1).
 - 2026-11-26 (M2): Auth cookies set `Secure=True` when `ENV=prod` (`Secure=False` in local HTTP dev/test so localhost/TestClient works without TLS); `refresh_token` path strictly `/api/auth` per `architecture.md §6`. `GET /api/audit/verify` permits both `admin` and `auditor` (read-only) to align `architecture.md §7` and `design.md §5`.
 - 2026-11-26 (M3): Added `python-multipart==0.0.20` (required by FastAPI for `UploadFile`/`Form` multipart uploads) and recorded it in `architecture.md §2`.
+- 2026-11-26 (UI/UX Refinements — user approved): Renamed user-facing `APP_NAME` from `ClinicShield` to `JOGGO`; added Alembic migration `0002_user_profile_fields` (`age`, `designation`, `hospital_name`, `avatar_data_url` <= 256 KB) on `users` + `/api/me`; added 91-day SQL activity heatmap to Doctor Dashboard and Admin Analytics using teal `#0F766E` intensity levels; redesigned Login/Signup into 50/50 trust split and Document Review into 50/50 split (Left=Modified with red issue lines & enlarged Jump button, Right=Original, full-width Generated Draft below).
 
 ## 5. Build order and checklist
 
@@ -163,3 +164,4 @@ Detection is rule + small-model based and not perfect → mandatory human review
 - 2026-11-26 — M8 — Built frontend foundation (lib/api.ts, auth context, formatters, middleware redirects, base UI components, BrandLoader, RouteProgressBar, PublicLayout, AppLayout) and public/auth/error pages (Landing, About, FAQ, Login, Signup, Google button, 404, 403, error boundary); verified next build, tsc, lint, and live routes.
 - 2026-11-26 — M9 — Built all authenticated frontend pages for Doctor (Dashboard, New Document with live polling, My Documents, 3-pane Review with highlight-to-tokenize & PDF preview, Help + threads), Admin (Overview, Users, Complaints + threads, Analytics, Audit Logs with update animations), Auditor (Audit Logs), and Profile; verified production build, typecheck, lint (0 warnings), and live same-origin E2E flow.
 - 2026-11-26 — M10 — Finalized README.md (problem, track, architecture, deploy guide, A03/A06 map, limitations), generated 3 synthetic sample PDF fixtures in backend/tests/fixtures/, verified 0 secrets/TODOs and 36/36 pytest + frontend typecheck/lint green from fresh Docker stack.
+- 2026-11-26 — UI/UX Refinements — Updated brand to JOGGO, raised readable body text size (15px), added crisp navbar border + shadow, redesigned Login/Signup 50/50 trust split, added 91-day teal GitHub-style ActivityHeatmap on Dashboard & Admin Analytics, redesigned Document Review to 50/50 split (Left=Modified with red issue lines & prominent Jump button, Right=Original, Generated Draft below) with high-visibility steppers, and added Alembic migration 0002 + editable Profile fields (age, designation, hospital_name, profile picture); 36/36 pytest + frontend build/tsc/lint passed.

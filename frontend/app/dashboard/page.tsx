@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 
 import { AppLayout } from "@/components/layout/AppLayout";
+import { ActivityHeatmap } from "@/components/ui/ActivityHeatmap";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TableSkeleton } from "@/components/ui/Skeleton";
 import { DocumentStatusBadge } from "@/components/ui/StatusBadge";
@@ -58,7 +59,7 @@ function DashboardContent() {
       </div>
 
       {/* Plain row of three figures (no card grid, design.md §5) */}
-      <dl className="mt-8 grid grid-cols-1 gap-6 border-y border-border py-6 sm:grid-cols-3">
+      <dl className="mt-8 grid grid-cols-1 gap-6 border-t border-border py-6 sm:grid-cols-3">
         <div>
           <dt className="text-xs text-text-muted">Processed this week</dt>
           <dd className="mt-1 text-2xl font-semibold text-text">
@@ -78,6 +79,14 @@ function DashboardContent() {
           </dd>
         </div>
       </dl>
+
+      {data?.activity_heatmap && (
+        <ActivityHeatmap
+          data={data.activity_heatmap}
+          title="Your activity"
+          subtitle="Daily uploads, review marks, generated drafts, and help replies across the last 13 weeks."
+        />
+      )}
 
       <section className="mt-10">
         <div className="mb-4 flex items-center justify-between">

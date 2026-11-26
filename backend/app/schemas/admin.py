@@ -39,6 +39,15 @@ class EntityTypeCount(BaseModel):
     count: int
 
 
+class ActivityDayItem(BaseModel):
+    date: str
+    total: int
+    documents_uploaded: int
+    reviews_and_marks: int
+    generations_completed: int
+    comments_and_help: int
+
+
 class DashboardResponse(BaseModel):
     counts_by_status: dict[str, int]
     processed_last_7_days: int
@@ -47,6 +56,7 @@ class DashboardResponse(BaseModel):
     recent_documents: list[DocumentListItem]
     top_entity_types: list[EntityTypeCount]
     avg_pipeline_seconds: float | None
+    activity_heatmap: list[ActivityDayItem]
 
 
 class AdminOverviewResponse(BaseModel):
@@ -98,3 +108,4 @@ class AdminAnalyticsResponse(BaseModel):
     complaints_by_status: dict[str, int]
     safety_block_rate: float
     entity_type_totals: list[EntityTypeCount]
+    activity_heatmap: list[ActivityDayItem]

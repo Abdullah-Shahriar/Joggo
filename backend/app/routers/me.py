@@ -35,16 +35,51 @@ def get_me(user: User = Depends(current_user)) -> AuthUserResponse:
     return serialize_user(user)
 
 
+ALLOWED_AVATAR_PREFIXES = (
+    "data:image/png;base64,",
+    "data:image/jpeg;base64,",
+    "data:image/webp;base64,",
+)
+
+
 @router.patch("", response_model=AuthUserResponse)
 def update_me(
     payload: UpdateProfileRequest,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> AuthUserResponse:
-    cleaned_name = payload.full_name.strip()
-    if len(cleaned_name) < 2:
-        raise AppError(ErrorCode.VALIDATION_ERROR, 422, "Full name must be at least 2 characters.")
-    user.full_name = cleaned_name
+    provided = payload.model_fields_set
+
+    if "full_name" in provided and payload.full_name is not None:
+        cleaned_name = payload.full_name.strip()
+        if len(cleaned_name) < 2:
+            raise AppError(ErrorCode.VALIDATION_ERROR, 422, "Full name must be at least 2 characters.")
+        user.full_name = cleaned_name
+
+    if "age" in provided:
+        user.age = payload.age
+
+    if "designation" in provided:
+        cleaned_desig = (payload.designation or "").strip()
+        user.designation = cleaned_desig or None
+
+    if "hospital_name" in provided:
+        cleaned_hosp = (payload.hospital_name or "").strip()
+        user.hospital_name = cleaned_hosp or None
+
+    if "avatar_data_url" in provided:
+        raw_avatar = (payload.avatar_data_url or "").strip()
+        if not raw_avatar:
+            user.avatar_data_url = None
+        else:
+            if not raw_avatar.startswith(ALLOWED_AVATAR_PREFIXES):
+                raise AppError(
+                    ErrorCode.VALIDATION_ERROR,
+                    422,
+                    "Profile picture must be a PNG, JPEG, or WebP image.",
+                )
+            user.avatar_data_url = raw_avatar
+
     db.commit()
     db.refresh(user)
     return serialize_user(user)

@@ -39,7 +39,7 @@ export default function FaqPage() {
     <PublicLayout>
       <div className="mx-auto max-w-prose px-4 py-16 sm:px-6">
         <h1 className="text-[28px] font-semibold text-text">Frequently asked questions</h1>
-        <p className="mt-2 text-sm text-text-muted">
+        <p className="mt-2 text-[15px] text-text-muted">
           Key details on privacy, temporary memory, and AI safety.
         </p>
 
@@ -68,7 +68,7 @@ export default function FaqPage() {
                   }`}
                 >
                   <div className="overflow-hidden">
-                    <p className="pb-4 text-sm text-text-muted">{item.a}</p>
+                    <p className="pb-4 text-[15px] leading-relaxed text-text-muted">{item.a}</p>
                   </div>
                 </div>
               </div>

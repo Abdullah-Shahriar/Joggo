@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { AppLayout } from "@/components/layout/AppLayout";
+import { ActivityHeatmap } from "@/components/ui/ActivityHeatmap";
 import { TableSkeleton } from "@/components/ui/Skeleton";
 import { apiRequest } from "@/lib/api";
 import type { AdminAnalyticsResponse } from "@/lib/types";
@@ -59,13 +60,13 @@ function AdminAnalyticsContent() {
     <div className="space-y-12">
       <div>
         <h1 className="text-[28px] font-semibold text-text">Analytics</h1>
-        <p className="mt-1 text-sm text-text-muted">
+        <p className="mt-1.5 text-[15px] text-text-muted">
           Aggregate operational metrics only. No document content or filenames are included.
         </p>
       </div>
 
       {/* Headline metrics row */}
-      <dl className="grid grid-cols-1 gap-6 border-y border-border py-5 sm:grid-cols-3">
+      <dl className="grid grid-cols-1 gap-6 border-t border-border py-5 sm:grid-cols-3">
         <div>
           <dt className="text-xs text-text-muted">Safety block rate</dt>
           <dd className="mt-1 text-xl font-semibold text-text">
@@ -83,6 +84,12 @@ function AdminAnalyticsContent() {
           </dd>
         </div>
       </dl>
+
+      <ActivityHeatmap
+        data={data.activity_heatmap}
+        title="Platform activity"
+        subtitle="Aggregate daily uploads, reviews, generated drafts, and support activity across the last 13 weeks."
+      />
 
       {/* Users by role & status */}
       <section className="grid grid-cols-1 gap-10 lg:grid-cols-2">

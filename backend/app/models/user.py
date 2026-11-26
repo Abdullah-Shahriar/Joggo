@@ -27,6 +27,10 @@ class User(Base):
             "password_hash IS NOT NULL OR google_sub IS NOT NULL",
             name="ck_users_auth_method",
         ),
+        CheckConstraint(
+            "age IS NULL OR (age >= 18 AND age <= 120)",
+            name="ck_users_age_range",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -39,6 +43,10 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     google_sub: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
     full_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    age: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    designation: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    hospital_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    avatar_data_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     role: Mapped[UserRole] = mapped_column(
         SAEnum(UserRole, name="user_role", native_enum=True),
         nullable=False,

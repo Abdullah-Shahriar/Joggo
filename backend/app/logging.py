@@ -47,6 +47,7 @@ FORBIDDEN_KEY_SUBSTRINGS: tuple[str, ...] = (
     "phone",
     "request_body",
     "body",
+    "avatar",
 )
 
 SENSITIVE_PATTERNS: tuple[re.Pattern[str], ...] = (
