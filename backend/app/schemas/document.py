@@ -1,8 +1,8 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class DocumentUploadResponse(BaseModel):
@@ -32,6 +32,26 @@ class DocumentEntityResponse(BaseModel):
     occurrences: int
 
 
+class DocumentListItem(BaseModel):
+    id: uuid.UUID
+    original_filename: str
+    size_bytes: int
+    page_count: int
+    task_type: str
+    status: str
+    entity_count: int
+    vault_expired: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class DocumentListResponse(BaseModel):
+    items: list[DocumentListItem]
+    total: int
+    page: int
+    page_size: int
+
+
 class DocumentDetailResponse(BaseModel):
     id: uuid.UUID
     original_filename: str
@@ -52,3 +72,69 @@ class DocumentDetailResponse(BaseModel):
     sanitized_sha256: str | None = None
     steps: list[PipelineStepResponse]
     entities: list[DocumentEntityResponse]
+
+
+class DocumentStepsResponse(BaseModel):
+    document_id: uuid.UUID
+    status: str
+    steps: list[PipelineStepResponse]
+
+
+class OriginalHighlight(BaseModel):
+    start: int
+    end: int
+    type: str
+    token: str
+    source: str
+    rule: str
+
+
+class OriginalTextResponse(BaseModel):
+    document_id: uuid.UUID
+    original_text: str
+    highlights: list[OriginalHighlight]
+
+
+class SafetyFindingView(BaseModel):
+    type: str
+    reason: str
+    start: int
+    end: int
+    snippet: str | None = None
+
+
+class SanitizedTextResponse(BaseModel):
+    document_id: uuid.UUID
+    status: str
+    sanitized_text: str
+    sanitized_sha256: str
+    vault_expired: bool
+    version: int
+    safety_status: str | None
+    findings: list[SafetyFindingView]
+    warnings: list[str]
+
+
+class ManualMarkRequest(BaseModel):
+    text: str = Field(min_length=2, max_length=200)
+    entity_type: Literal[
+        "PATIENT",
+        "DOCTOR",
+        "PERSON",
+        "PHONE",
+        "EMAIL",
+        "ID",
+        "MRN",
+        "LOCATION",
+        "FACILITY",
+        "OTHER",
+    ]
+
+
+class ManualMarkResponse(BaseModel):
+    document: DocumentDetailResponse
+    occurrences: int
+
+
+class ApproveDocumentRequest(BaseModel):
+    sanitized_sha256: str = Field(min_length=64, max_length=64)

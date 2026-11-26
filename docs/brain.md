@@ -7,9 +7,9 @@ Read order each session: `brain.md` → `rules.md` → `architecture.md` → `de
 
 ## 1. Status (edit me)
 
-- Current milestone: **M3 (complete — starting M4)**
+- Current milestone: **M4 (complete — starting M5)**
 - Last updated: 2026-11-26
-- Last full test run: pass (22/22 backend pytest against PostgreSQL)
+- Last full test run: pass (26/26 backend pytest against PostgreSQL)
 - Blockers: none
 
 ## 2. Project summary
@@ -74,10 +74,10 @@ Do the milestones in order. Each has a "Done when". Do not start the next until 
 - **Done when:** sample PDFs (text, scanned, image header) extract correctly; bad files give the right error codes; vault wipes on logout and idle.
 
 ### M4 — Detection, tokenization, safety, review
-- [ ] Detectors, date/age rules, stoplists, overlap resolution, sweep
-- [ ] Tokenizer + render + entity rows; safety scan; state machine `transition()`
-- [ ] Pipeline orchestrator with step rows; resume; manual marks; approve with `sanitized_sha256` check; version conflict
-- [ ] Endpoints: list/detail/steps/original-text/original-pdf/sanitized/delete
+- [x] Detectors, date/age rules, stoplists, overlap resolution, sweep
+- [x] Tokenizer + render + entity rows; safety scan; state machine `transition()`
+- [x] Pipeline orchestrator with step rows; resume; manual marks; approve with `sanitized_sha256` check; version conflict
+- [x] Endpoints: list/detail/steps/original-text/original-pdf/sanitized/delete
 - **Done when:** the Detection, Safety, Pipeline and privacy (P1/T5) tests pass on the three sample PDFs; a seeded leak yields BLOCK and a manual mark clears it.
 
 ### M5 — LLM layer and results (A06, A05, A07)
@@ -156,3 +156,4 @@ Detection is rule + small-model based and not perfect → mandatory human review
 - 2026-11-26 — M1 — Added SQLAlchemy 2.0 models for all 9 tables, Alembic initial migration with audit_logs immutability trigger, idempotent scripts/seed.py, backend Dockerfile startup command, and M1 database tests (8/8 passed on fresh Postgres).
 - 2026-11-26 — M2 — Added auth (signup, login, lockout, refresh rotation + reuse detection, logout, Google ID token login, /me profile/password/sessions), RBAC dependencies, S7 CSRF enforcement, slowapi rate limiting, hash-chained audit service + /api/audit & /api/audit/verify, and M2 tests (18/18 passed).
 - 2026-11-26 — M3 — Added AES-256-GCM in-memory Vault (HKDF, LRU, 20-entry cap, sweeper, startup recovery), atomic state machine, ThreadPoolExecutor jobs, PyMuPDF + Tesseract PDF extraction (annotations, widgets, OCR pages/images, metadata hints), POST /api/documents with all validations and duplicate race handling, scripts/make_sample_pdfs.py, and M3 tests (22/22 passed).
+- 2026-11-26 — M4 — Added HIPAA-18 detection suite (regex, labels, titles, facility, dates/ages, Presidio/spaCy, stoplists, metadata hints, literal sweep, overlap resolution), context-preserving tokenizer, safety gate (literal leak + masked re-detection + pattern checks), 4-step resumable pipeline, manual highlight-to-tokenize with If-Match optimistic locking, approval sha256 check, document review endpoints, and M4 tests (26/26 passed).

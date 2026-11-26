@@ -72,18 +72,17 @@ def _make_blank_pdf(pages: int = 1, encrypt: bool = False) -> bytes:
     return raw
 
 
-def _wait_for_extract_done(client: TestClient, doc_id: str, timeout: float = 15.0) -> dict:
+def _wait_for_extract_done(client: TestClient, doc_id: str, timeout: float = 25.0) -> dict:
     deadline = time.monotonic() + timeout
     last_body: dict = {}
     while time.monotonic() < deadline:
         res = client.get(f"/api/documents/{doc_id}")
         assert res.status_code == 200
         last_body = res.json()
-        extract_step = next(s for s in last_body["steps"] if s["step"] == "EXTRACT")
-        if extract_step["status"] in {"succeeded", "failed"}:
+        if last_body["status"] not in {"UPLOADED", "PROCESSING"}:
             return last_body
-        time.sleep(0.1)
-    raise AssertionError(f"Timed out waiting for EXTRACT step; last={last_body}")
+        time.sleep(0.15)
+    raise AssertionError(f"Timed out waiting for pipeline completion; last={last_body}")
 
 
 def test_vault_encryption_lru_caps_idle_expiration_and_startup_recovery() -> None:
