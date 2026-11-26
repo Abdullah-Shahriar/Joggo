@@ -60,7 +60,7 @@ export function PublicLayout({
         Skip to main content
       </a>
 
-      <header className="sticky top-0 z-30 h-16 border-b border-[#D1D5DB] bg-bg shadow-[0_1px_4px_rgba(17,24,39,0.08)]">
+      <header className="joggo-bar-top sticky top-0 z-30 h-16 bg-bg">
         <div className="mx-auto flex h-full max-w-app items-center justify-between px-4 sm:px-6">
           <Link href="/" aria-label={`${APP_NAME} home`}>
             <Logo />
@@ -89,13 +89,13 @@ export function PublicLayout({
           <div className="hidden items-center gap-3 sm:flex">
             <Link
               href="/signup"
-              className="inline-flex h-10 items-center justify-center rounded border border-border bg-bg px-4 text-sm font-medium text-text hover:bg-bg-subtle"
+              className="joggo-btn-elevated inline-flex h-10 items-center justify-center rounded border border-border bg-bg px-4 text-sm font-medium text-text hover:bg-bg-subtle"
             >
               Create account
             </Link>
             <Link
               href="/login"
-              className="inline-flex h-10 items-center justify-center rounded bg-accent px-4 text-sm font-medium text-white hover:bg-accent-hover"
+              className="joggo-btn-primary-elevated inline-flex h-10 items-center justify-center rounded bg-accent px-4 text-sm font-medium text-white hover:bg-accent-hover"
             >
               Login
             </Link>

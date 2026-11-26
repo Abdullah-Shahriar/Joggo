@@ -214,7 +214,7 @@ export function SendToAiButtons({
   return (
     <section
       aria-label="Open privacy-safe text in an external AI chat"
-      className="mt-5 rounded border border-border bg-bg p-4 sm:p-5"
+      className="joggo-surface-sep mt-5 rounded border border-border bg-bg p-4 sm:p-5"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -303,7 +303,7 @@ export function SendToAiButtons({
               disabled={!isReady || isWaiting}
               aria-label={`${item.label} in a new web session`}
               onClick={() => openConfirmModal(item)}
-              className={`group inline-flex h-11 w-full items-center justify-between gap-2.5 rounded-md border px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60 ${
+              className={`joggo-btn-elevated group inline-flex h-11 w-full items-center justify-between gap-2.5 rounded-md border px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60 ${
                 isThisWaiting
                   ? "border-accent bg-accent-tint text-accent"
                   : "border-border bg-bg text-text hover:border-accent hover:bg-bg-subtle"

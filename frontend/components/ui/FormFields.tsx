@@ -24,7 +24,7 @@ export const Input = forwardRef<
         id={id}
         aria-invalid={Boolean(error)}
         aria-describedby={describedBy}
-        className={`h-10 w-full rounded border bg-bg px-3 text-base text-text placeholder:text-text-muted disabled:bg-bg-subtle disabled:text-text-muted ${
+        className={`joggo-input-sep h-10 w-full rounded border bg-bg px-3 text-base text-text placeholder:text-text-muted disabled:bg-bg-subtle disabled:text-text-muted ${
           error ? "border-danger" : "border-border"
         } ${className}`}
         {...props}
@@ -57,7 +57,7 @@ export const Select = forwardRef<
         id={id}
         aria-invalid={Boolean(error)}
         aria-describedby={describedBy}
-        className={`h-10 w-full rounded border bg-bg px-3 text-base text-text disabled:bg-bg-subtle disabled:text-text-muted ${
+        className={`joggo-input-sep h-10 w-full rounded border bg-bg px-3 text-base text-text disabled:bg-bg-subtle disabled:text-text-muted ${
           error ? "border-danger" : "border-border"
         } ${className}`}
         {...props}
@@ -92,7 +92,7 @@ export const Textarea = forwardRef<
         id={id}
         aria-invalid={Boolean(error)}
         aria-describedby={describedBy}
-        className={`min-h-[112px] w-full rounded border bg-bg p-3 text-base text-text placeholder:text-text-muted disabled:bg-bg-subtle disabled:text-text-muted ${
+        className={`joggo-input-sep min-h-[112px] w-full rounded border bg-bg p-3 text-base text-text placeholder:text-text-muted disabled:bg-bg-subtle disabled:text-text-muted ${
           error ? "border-danger" : "border-border"
         } ${className}`}
         {...props}

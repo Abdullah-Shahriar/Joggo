@@ -31,7 +31,7 @@ Stack: Next.js 14 (App Router), TypeScript strict, Tailwind, TanStack Query, rea
 | `danger-tint` | `#FEF2F2` | error banner background |
 
 Typography: Inter (`next/font/google`, with system-ui fallback) for UI copy, and IBM Plex Mono (`next/font/google`, weights 400/500, Tailwind `font-mono`) strictly for placeholders/tokens, document IDs, and small clinical header codes (e.g. `WARD 4`, `CLEAN`, `DE-IDENTIFIED`, `ON YOUR SCREEN ONLY`). Sizes: 14px body, 12px small, 16px inputs, 20px h2, 28px h1, 44px landing hero. Weights 400/500/600. Line height 1.5. Max content width 1120px (app), 720px (text pages), 640px (forms).
-Spacing scale: 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64. Radius 6px (inputs, buttons), 8px (modals). Shadow: none, except modals `0 8px 24px rgba(0,0,0,.12)`.
+Spacing scale: 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64. Radius 6px (inputs, buttons), 8px (modals). Hairline separation shadows (white-theme distinction with ~1px `#E5E7EB` borders): buttons `0 1px 2px rgba(17,24,39,.07)`, sections/panes `0 1px 3px rgba(17,24,39,.06), 0 1px 2px rgba(17,24,39,.04)`, sticky bars `0 1px 4px rgba(17,24,39,.08)`, dividers `0 1px 0 rgba(17,24,39,.04)`, modals `0 8px 24px rgba(0,0,0,.12)`.
 Focus: 2px accent outline with 2px offset on every interactive element.
 
 ## 3. Components

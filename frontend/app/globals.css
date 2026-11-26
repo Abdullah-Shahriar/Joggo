@@ -2,6 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --joggo-line: #E5E7EB;
+  --joggo-shadow-button: 0 1px 2px rgba(17, 24, 39, 0.07), 0 0 0 1px rgba(17, 24, 39, 0.02);
+  --joggo-shadow-button-hover: 0 2px 4px rgba(17, 24, 39, 0.11), 0 1px 2px rgba(17, 24, 39, 0.06);
+  --joggo-shadow-button-primary: 0 1px 2px rgba(15, 118, 110, 0.22), 0 1px 3px rgba(17, 24, 39, 0.08);
+  --joggo-shadow-button-primary-hover: 0 2px 5px rgba(15, 118, 110, 0.28), 0 1px 2px rgba(17, 24, 39, 0.10);
+  --joggo-shadow-section: 0 1px 3px rgba(17, 24, 39, 0.06), 0 1px 2px rgba(17, 24, 39, 0.04);
+  --joggo-shadow-bar-down: 0 1px 4px rgba(17, 24, 39, 0.08);
+  --joggo-shadow-bar-up: 0 -1px 4px rgba(17, 24, 39, 0.07);
+  --joggo-shadow-divider: 0 1px 0 rgba(17, 24, 39, 0.04);
+  --joggo-shadow-input: 0 1px 2px rgba(17, 24, 39, 0.04);
+}
+
 @layer base {
   html,
   body {
@@ -16,6 +29,49 @@
   :focus-visible {
     outline: 2px solid #0F766E;
     outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .joggo-btn-elevated {
+    box-shadow: var(--joggo-shadow-button);
+    transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .joggo-btn-elevated:hover:not(:disabled) {
+    box-shadow: var(--joggo-shadow-button-hover);
+  }
+
+  .joggo-btn-primary-elevated {
+    box-shadow: var(--joggo-shadow-button-primary);
+    transition: background-color 150ms ease, box-shadow 150ms ease;
+  }
+  .joggo-btn-primary-elevated:hover:not(:disabled) {
+    box-shadow: var(--joggo-shadow-button-primary-hover);
+  }
+
+  .joggo-surface-sep {
+    border-width: 1px;
+    box-shadow: var(--joggo-shadow-section);
+  }
+
+  .joggo-divider-sep {
+    border-bottom: 1px solid var(--joggo-line);
+    box-shadow: var(--joggo-shadow-divider);
+  }
+
+  .joggo-bar-top {
+    border-bottom: 1px solid var(--joggo-line);
+    box-shadow: var(--joggo-shadow-bar-down);
+  }
+
+  .joggo-bar-bottom {
+    border-top: 1px solid var(--joggo-line);
+    box-shadow: var(--joggo-shadow-bar-up);
+  }
+
+  .joggo-input-sep {
+    border-width: 1px;
+    box-shadow: var(--joggo-shadow-input);
   }
 }
 

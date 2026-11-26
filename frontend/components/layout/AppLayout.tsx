@@ -117,7 +117,7 @@ export function AppLayout({
         Skip to main content
       </a>
 
-      <header className="sticky top-0 z-30 h-16 border-b border-[#D1D5DB] bg-bg shadow-[0_1px_4px_rgba(17,24,39,0.08)]">
+      <header className="joggo-bar-top sticky top-0 z-30 h-16 bg-bg">
         <div className="mx-auto flex h-full max-w-app items-center justify-between px-4 sm:px-6">
           <Link href={roleHome} aria-label={`${APP_NAME} home`}>
             <Logo />

@@ -899,7 +899,7 @@ function DocumentReviewContent() {
   return (
     <div>
       {/* Header row */}
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
+      <div className="joggo-divider-sep flex flex-wrap items-start justify-between gap-3 pb-4">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-text-muted">
             <ClipboardList className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.5} aria-hidden="true" />
@@ -924,7 +924,7 @@ function DocumentReviewContent() {
       {/* High-visibility Step Progression Indicator */}
       <section
         aria-label="Document processing progress"
-        className="mt-5 rounded border border-border bg-bg-subtle p-4"
+        className="joggo-surface-sep mt-5 rounded border border-border bg-bg-subtle p-4"
       >
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs">
           <span className="font-semibold text-text">
@@ -1233,12 +1233,12 @@ function DocumentReviewContent() {
           onContextMenu={blockProtectedCopy}
           onDragStart={(e) => e.preventDefault()}
           onKeyDown={(e) => blockProtectedShortcut(e, false)}
-          className={`flex h-[480px] flex-col overflow-hidden rounded border bg-bg-subtle sm:h-[580px] lg:h-[640px] ${
+          className={`joggo-surface-sep flex h-[480px] flex-col overflow-hidden rounded border bg-bg-subtle sm:h-[580px] lg:h-[640px] ${
             hasSafetyIssues ? "border-danger" : "border-border"
           } ${mobileTab === "cleaned" ? "flex" : "hidden lg:flex"}`}
         >
           {/* Clinical Chart-Sheet Header */}
-          <div className="bg-bg px-4 pt-3 pb-2.5 border-b-2 border-accent">
+          <div className="border-b border-accent bg-bg px-4 pt-3 pb-2.5 shadow-[0_1px_0_rgba(15,118,110,0.16)]">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-text">Cleaned record</h2>
               <span className="font-mono text-[11px] font-medium tracking-wider text-accent">
@@ -1311,7 +1311,7 @@ function DocumentReviewContent() {
             <div
               ref={cleanedRef}
               onMouseUp={handleCleanedMouseUp}
-              className="relative mx-auto min-h-full w-full overflow-hidden rounded-[2px] border border-border bg-bg px-4 py-5 text-[15px] text-text sm:px-7 sm:py-6"
+              className="joggo-surface-sep relative mx-auto min-h-full w-full overflow-hidden rounded-[2px] border border-border bg-bg px-4 py-5 text-[15px] text-text sm:px-7 sm:py-6"
             >
               {/* Faint diagonal DE-IDENTIFIED watermark */}
               <div
@@ -1354,12 +1354,12 @@ function DocumentReviewContent() {
           onContextMenu={blockProtectedCopy}
           onDragStart={(e) => e.preventDefault()}
           onKeyDown={(e) => blockProtectedShortcut(e, true)}
-          className={`cs-no-copy flex h-[480px] flex-col overflow-hidden rounded border border-border bg-bg-subtle sm:h-[580px] lg:h-[640px] ${
+          className={`joggo-surface-sep cs-no-copy flex h-[480px] flex-col overflow-hidden rounded border border-border bg-bg-subtle sm:h-[580px] lg:h-[640px] ${
             mobileTab === "original" ? "flex" : "hidden lg:flex"
           }`}
         >
           {/* Clinical Chart-Sheet Header */}
-          <div className="border-b-2 border-border bg-bg px-4 pt-3 pb-2.5">
+          <div className="joggo-divider-sep bg-bg px-4 pt-3 pb-2.5">
             <div className="flex items-center justify-between gap-2">
               <h2 className="flex items-center gap-1.5 text-sm font-semibold text-text">
                 <Lock className="h-3.5 w-3.5 shrink-0 text-text-muted" strokeWidth={1.5} aria-hidden="true" />
@@ -1436,7 +1436,7 @@ function DocumentReviewContent() {
                 </div>
               )
             ) : (
-              <div className="mx-auto min-h-full w-full rounded-[2px] border border-border bg-bg px-4 py-5 text-[15px] text-text sm:px-7 sm:py-6">
+              <div className="joggo-surface-sep mx-auto min-h-full w-full rounded-[2px] border border-border bg-bg px-4 py-5 text-[15px] text-text sm:px-7 sm:py-6">
                 {origLoading ? (
                   <PaneSkeleton />
                 ) : originalData ? (
@@ -1465,11 +1465,11 @@ function DocumentReviewContent() {
       <section
         ref={resultSectionRef}
         aria-label="Generated draft result"
-        className={`mt-6 overflow-hidden rounded border border-border bg-bg-subtle ${
+        className={`joggo-surface-sep mt-6 overflow-hidden rounded border border-border bg-bg-subtle ${
           mobileTab === "result" ? "block" : "hidden lg:block"
         }`}
       >
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-bg px-4 py-3">
+        <div className="joggo-divider-sep flex flex-wrap items-center justify-between gap-2 bg-bg px-4 py-3">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-semibold text-text">
               <FileHeart className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.5} aria-hidden="true" />
@@ -1541,7 +1541,7 @@ function DocumentReviewContent() {
         </div>
 
         <div className="p-4 sm:p-6">
-          <div className="mx-auto max-w-4xl rounded-[2px] border border-border bg-bg px-6 py-7 sm:px-10 sm:py-8">
+          <div className="joggo-surface-sep mx-auto max-w-4xl rounded-[2px] border border-border bg-bg px-6 py-7 sm:px-10 sm:py-8">
             {doc.status === "SENDING" ? (
               <BrandLoader label="Writing clinical draft (Step 6 of 6)…" />
             ) : doc.status === "LLM_FAILED" ? (
@@ -1610,7 +1610,7 @@ function DocumentReviewContent() {
       </section>
 
       {/* Sticky bottom action bar with Sign-out checklist */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-bg py-3">
+      <div className="joggo-bar-bottom fixed bottom-0 left-0 right-0 z-30 bg-bg py-3">
         <div className="mx-auto flex max-w-app flex-col gap-3 px-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center justify-between gap-3 lg:justify-start">
             <Button

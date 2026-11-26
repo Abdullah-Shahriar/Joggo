@@ -73,7 +73,7 @@ function DashboardContent() {
         ) : (
           <Link
             href="/documents/new"
-            className="inline-flex h-10 items-center justify-center rounded bg-accent px-4 text-sm font-medium text-white hover:bg-accent-hover"
+            className="joggo-btn-primary-elevated inline-flex h-10 items-center justify-center rounded bg-accent px-4 text-sm font-medium text-white hover:bg-accent-hover"
           >
             New document
           </Link>
@@ -81,7 +81,7 @@ function DashboardContent() {
       </div>
 
       {/* Plain row of three figures */}
-      <dl className="mt-8 grid grid-cols-1 gap-6 border-y border-border py-6 sm:grid-cols-3">
+      <dl className="mt-8 grid grid-cols-1 gap-6 border-y border-border py-6 shadow-[0_1px_0_rgba(17,24,39,0.04)] sm:grid-cols-3">
         <div>
           <dt className="text-xs text-text-muted">Awaiting review</dt>
           <dd className="mt-1 text-2xl font-semibold text-text">

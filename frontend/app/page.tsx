@@ -74,19 +74,19 @@ export default function LandingPage() {
             <div className="mt-7 flex flex-wrap gap-3">
               <Link
                 href="/login"
-                className="inline-flex h-11 items-center justify-center rounded bg-accent px-5 text-sm font-medium text-white hover:bg-accent-hover"
+                className="joggo-btn-primary-elevated inline-flex h-11 items-center justify-center rounded bg-accent px-5 text-sm font-medium text-white hover:bg-accent-hover"
               >
                 Get started
               </Link>
               <a
                 href="#the-problem"
-                className="inline-flex h-11 items-center justify-center rounded border border-border bg-bg px-5 text-sm font-medium text-text hover:bg-bg-subtle"
+                className="joggo-btn-elevated inline-flex h-11 items-center justify-center rounded border border-border bg-bg px-5 text-sm font-medium text-text hover:bg-bg-subtle"
               >
                 Why {APP_NAME}?
               </a>
               <a
                 href="#how-it-works"
-                className="inline-flex h-11 items-center justify-center rounded border border-border bg-bg px-5 text-sm font-medium text-text hover:bg-bg-subtle"
+                className="joggo-btn-elevated inline-flex h-11 items-center justify-center rounded border border-border bg-bg px-5 text-sm font-medium text-text hover:bg-bg-subtle"
               >
                 How it works
               </a>
@@ -97,8 +97,8 @@ export default function LandingPage() {
           <div className="mx-auto w-full max-w-[420px] lg:col-span-5 lg:max-w-none" aria-hidden="true">
             <div className="w-full">
               {/* Back card: Original admission form */}
-              <div className="w-[84%] rounded-[8px] border border-border bg-bg px-4 pb-8 pt-3.5 sm:w-[82%]">
-                <div className="flex items-center justify-between gap-2 border-b-2 border-border pb-2">
+              <div className="joggo-surface-sep w-[84%] rounded-[8px] border border-border bg-bg px-4 pb-8 pt-3.5 sm:w-[82%]">
+                <div className="joggo-divider-sep flex items-center justify-between gap-2 pb-2">
                   <span className="text-[13px] font-medium text-text">Admission form</span>
                   <span className="font-mono text-[11px] font-medium tracking-wide text-text-muted">
                     WARD 4
@@ -125,8 +125,8 @@ export default function LandingPage() {
               </div>
 
               {/* Front card: De-identified record sent to AI */}
-              <div className="relative z-10 -mt-5 ml-auto w-[84%] rounded-[8px] border border-accent bg-bg px-4 py-3.5 sm:w-[82%]">
-                <div className="flex items-center justify-between gap-2 border-b-2 border-accent pb-2">
+              <div className="joggo-surface-sep relative z-10 -mt-5 ml-auto w-[84%] rounded-[8px] border border-accent bg-bg px-4 py-3.5 sm:w-[82%]">
+                <div className="flex items-center justify-between gap-2 border-b border-accent pb-2 shadow-[0_1px_0_rgba(15,118,110,0.16)]">
                   <span className="text-[13px] font-medium text-text">Sent to AI</span>
                   <span className="font-mono text-[11px] font-medium tracking-wide text-accent">
                     CLEAN
@@ -163,7 +163,7 @@ export default function LandingPage() {
       </section>
 
       {/* Band 2: Highlighted Problem Statement (bg-subtle) */}
-      <section id="the-problem" className="border-y border-border bg-bg-subtle py-14 sm:py-16">
+      <section id="the-problem" className="border-y border-border bg-bg-subtle py-14 shadow-[inset_0_1px_0_rgba(17,24,39,0.03),0_1px_0_rgba(17,24,39,0.04)] sm:py-16">
         <div className="mx-auto max-w-app px-4 sm:px-6">
           <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-wider text-accent">
@@ -227,7 +227,7 @@ export default function LandingPage() {
       </section>
 
       {/* Band 4: Why it is safe (bg-subtle) */}
-      <section className="border-y border-border bg-bg-subtle py-14 sm:py-16">
+      <section className="border-y border-border bg-bg-subtle py-14 shadow-[inset_0_1px_0_rgba(17,24,39,0.03),0_1px_0_rgba(17,24,39,0.04)] sm:py-16">
         <div className="mx-auto max-w-prose px-4 sm:px-6">
           <h2 className="flex items-center gap-2 text-2xl font-semibold text-text">
             <ShieldPlus className="h-5 w-5 shrink-0 text-accent" strokeWidth={1.5} aria-hidden="true" />
@@ -254,7 +254,7 @@ export default function LandingPage() {
           <div className="mt-6">
             <Link
               href="/login"
-              className="inline-flex h-11 items-center justify-center rounded bg-accent px-6 text-sm font-medium text-white hover:bg-accent-hover"
+              className="joggo-btn-primary-elevated inline-flex h-11 items-center justify-center rounded bg-accent px-6 text-sm font-medium text-white hover:bg-accent-hover"
             >
               Get started
             </Link>
