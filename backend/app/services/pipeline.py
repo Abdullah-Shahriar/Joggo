@@ -13,11 +13,13 @@ from app.errors import AppError, ErrorCode
 from app.models.audit import AuditOutcome
 from app.models.document import Document, DocumentStatus
 from app.models.entity import DocumentEntity, EntitySource
+from app.models.llm_request import LLMRequest, LLMRequestStatus
 from app.models.step import PipelineStep, PipelineStepName, PipelineStepStatus
 from app.services import audit
 from app.services.detection.base import MANUAL_MARK_TYPES, TOKEN_PATTERN_RE, Span
 from app.services.detection.resolve import run_detection
 from app.services.extraction import ExtractionError, extract_pdf
+from app.services.llm.router import LLMRouterError, route_generate
 from app.services.safety import run_safety_scan
 from app.services.state import transition
 from app.services.tokenizer import TokenizationResult, tokenize_text
@@ -525,3 +527,120 @@ def apply_manual_mark(
     db.commit()
     db.refresh(updated_doc)
     return updated_doc, len(matches)
+
+
+def run_llm_stage(doc_id: uuid.UUID, llm_request_id: uuid.UUID) -> None:
+    """Execute LLM_CALL pipeline step in background worker using sanitized text only (P3/A06)."""
+    with SessionLocal() as db:
+        doc = db.get(Document, doc_id)
+        llm_req = db.get(LLMRequest, llm_request_id)
+        if doc is None or llm_req is None:
+            return
+        if doc.status != DocumentStatus.SENDING or not doc.sanitized_text:
+            return
+
+        llm_step = _get_step(db, doc_id, PipelineStepName.LLM_CALL)
+        _mark_step_running(db, llm_step)
+        sanitized_text = doc.sanitized_text
+        task_type = doc.task_type
+        owner_id = doc.owner_id
+
+    try:
+        outcome = route_generate(task_type, sanitized_text)
+    except LLMRouterError as exc:
+        total_attempts = sum(item.attempts for item in exc.history)
+        total_latency = sum(item.latency_ms for item in exc.history)
+        last_prov = exc.history[-1].provider if exc.history else None
+        last_model = exc.history[-1].model if exc.history else None
+
+        with SessionLocal() as db:
+            llm_req = db.get(LLMRequest, llm_request_id)
+            if llm_req is not None:
+                llm_req.provider = last_prov
+                llm_req.model = last_model
+                llm_req.status = LLMRequestStatus.failed
+                llm_req.attempts = total_attempts
+                llm_req.latency_ms = total_latency
+                llm_req.error_code = exc.failure_code.value
+
+            llm_step = _get_step(db, doc_id, PipelineStepName.LLM_CALL)
+            llm_step.status = PipelineStepStatus.failed
+            llm_step.error_code = exc.failure_code.value
+            llm_step.error_message = "Could not generate a draft from AI providers."
+            llm_step.finished_at = datetime.now(timezone.utc)
+
+            doc = db.get(Document, doc_id)
+            if doc is not None and doc.status == DocumentStatus.SENDING:
+                transition(
+                    db,
+                    doc_id,
+                    {DocumentStatus.SENDING},
+                    DocumentStatus.LLM_FAILED,
+                    failure_code=exc.failure_code.value,
+                )
+                audit.record(
+                    db,
+                    action="DOC_PIPELINE_FAILED",
+                    outcome=AuditOutcome.error,
+                    actor_id=owner_id,
+                    actor_role="doctor",
+                    resource_type="document",
+                    resource_id=str(doc_id),
+                    metadata={"step": "LLM_CALL", "error_code": exc.failure_code.value, "attempts": total_attempts},
+                )
+            db.commit()
+        return
+
+    with SessionLocal() as db:
+        llm_req = db.get(LLMRequest, llm_request_id)
+        if llm_req is not None:
+            llm_req.provider = outcome.result.provider
+            llm_req.model = outcome.result.model
+            llm_req.status = LLMRequestStatus.succeeded
+            llm_req.attempts = outcome.attempts_total
+            llm_req.latency_ms = outcome.result.latency_ms
+            llm_req.error_code = None
+
+        llm_step = _get_step(db, doc_id, PipelineStepName.LLM_CALL)
+        llm_step.status = PipelineStepStatus.succeeded
+        llm_step.finished_at = datetime.now(timezone.utc)
+
+        doc = db.get(Document, doc_id)
+        if doc is not None and doc.status == DocumentStatus.SENDING:
+            now = datetime.now(timezone.utc)
+            transition(
+                db,
+                doc_id,
+                {DocumentStatus.SENDING},
+                DocumentStatus.COMPLETED,
+                llm_response_tokenized=outcome.result.text,
+                llm_provider_used=outcome.result.provider,
+                failure_code=None,
+                completed_at=now,
+            )
+            if outcome.used_fallback:
+                audit.record(
+                    db,
+                    action="DOC_LLM_FALLBACK",
+                    outcome=AuditOutcome.allowed,
+                    actor_id=owner_id,
+                    actor_role="doctor",
+                    resource_type="document",
+                    resource_id=str(doc_id),
+                    metadata={"provider": outcome.result.provider, "attempts": outcome.attempts_total},
+                )
+            audit.record(
+                db,
+                action="DOC_COMPLETE",
+                outcome=AuditOutcome.allowed,
+                actor_id=owner_id,
+                actor_role="doctor",
+                resource_type="document",
+                resource_id=str(doc_id),
+                metadata={
+                    "provider": outcome.result.provider,
+                    "attempts": outcome.attempts_total,
+                    "latency_ms": outcome.result.latency_ms,
+                },
+            )
+        db.commit()

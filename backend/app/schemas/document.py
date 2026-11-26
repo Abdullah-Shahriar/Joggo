@@ -138,3 +138,26 @@ class ManualMarkResponse(BaseModel):
 
 class ApproveDocumentRequest(BaseModel):
     sanitized_sha256: str = Field(min_length=64, max_length=64)
+
+
+class SendDocumentResponse(BaseModel):
+    document_id: uuid.UUID
+    status: str
+    llm_request_id: uuid.UUID
+    idempotency_key: str
+    replayed: bool = False
+
+
+class RehydrateWarning(BaseModel):
+    code: str
+    token: str
+
+
+class DocumentResultResponse(BaseModel):
+    document_id: uuid.UUID
+    text: str
+    rehydrated: bool
+    vault_expired: bool
+    llm_provider_used: str | None
+    fallback_used: bool
+    warnings: list[RehydrateWarning]

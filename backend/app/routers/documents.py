@@ -21,9 +21,10 @@ from app.deps import (
     require_doctor_for_documents,
 )
 from app.errors import AppError, ErrorCode
-from app.models.audit import AuditOutcome
+from app.models.audit import AuditLog, AuditOutcome
 from app.models.document import Document, DocumentStatus, TaskType
 from app.models.entity import DocumentEntity
+from app.models.llm_request import LLMRequest, LLMRequestStatus
 from app.models.step import PipelineStep, PipelineStepName, PipelineStepStatus
 from app.ratelimit import limiter, user_or_ip_key
 from app.schemas.auth import MessageResponse
@@ -33,6 +34,7 @@ from app.schemas.document import (
     DocumentEntityResponse,
     DocumentListItem,
     DocumentListResponse,
+    DocumentResultResponse,
     DocumentStepsResponse,
     DocumentUploadResponse,
     ManualMarkRequest,
@@ -40,11 +42,15 @@ from app.schemas.document import (
     OriginalHighlight,
     OriginalTextResponse,
     PipelineStepResponse,
+    RehydrateWarning,
     SafetyFindingView,
     SanitizedTextResponse,
+    SendDocumentResponse,
 )
 from app.services import audit, jobs
-from app.services.pipeline import apply_manual_mark, run_document_pipeline
+from app.services.exporter import export_docx, export_txt
+from app.services.pipeline import apply_manual_mark, run_document_pipeline, run_llm_stage
+from app.services.rehydrate import rehydrate_text
 from app.services.state import transition
 from app.services.vault import vault
 
@@ -584,6 +590,228 @@ def approve_document(
     )
     db.commit()
     return _serialize_detail(db, updated)
+
+
+@router.post("/{document_id}/send", response_model=SendDocumentResponse, status_code=202)
+@limiter.limit("10/minute", key_func=user_or_ip_key)
+def send_document(
+    request: Request,
+    response: Response,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    doc: Document = Depends(get_owned_document),
+    auth: AuthContext = Depends(require_active_doctor_for_documents),
+    db: Session = Depends(get_db),
+) -> SendDocumentResponse:
+    if not idempotency_key or not idempotency_key.strip():
+        raise AppError(
+            ErrorCode.IDEMPOTENCY_KEY_REQUIRED,
+            400,
+            "Idempotency-Key header is required to send a document.",
+        )
+    idem_key = idempotency_key.strip()[:128]
+    ip = get_client_ip(request)
+
+    locked_doc = db.execute(
+        select(Document)
+        .where(Document.id == doc.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if locked_doc is None:
+        raise AppError(ErrorCode.NOT_FOUND, 404, "Document not found.")
+
+    existing_req = db.execute(
+        select(LLMRequest).where(
+            LLMRequest.document_id == locked_doc.id,
+            LLMRequest.idempotency_key == idem_key,
+        )
+    ).scalar_one_or_none()
+    if existing_req is not None:
+        response.status_code = 200
+        return SendDocumentResponse(
+            document_id=locked_doc.id,
+            status=locked_doc.status.value,
+            llm_request_id=existing_req.id,
+            idempotency_key=idem_key,
+            replayed=True,
+        )
+
+    transition(db, locked_doc.id, {DocumentStatus.APPROVED}, DocumentStatus.SENDING, failure_code=None)
+    llm_req = LLMRequest(
+        document_id=locked_doc.id,
+        idempotency_key=idem_key,
+        status=LLMRequestStatus.running,
+    )
+    db.add(llm_req)
+    db.flush()
+
+    audit.record(
+        db,
+        action="DOC_SEND",
+        outcome=AuditOutcome.allowed,
+        actor=auth.user,
+        resource_type="document",
+        resource_id=str(locked_doc.id),
+        ip=ip,
+        metadata={"task_type": locked_doc.task_type.value},
+    )
+    db.commit()
+
+    jobs.submit(run_llm_stage, locked_doc.id, llm_req.id)
+    return SendDocumentResponse(
+        document_id=locked_doc.id,
+        status=DocumentStatus.SENDING.value,
+        llm_request_id=llm_req.id,
+        idempotency_key=idem_key,
+        replayed=False,
+    )
+
+
+@router.post("/{document_id}/retry", response_model=DocumentUploadResponse, status_code=202)
+def retry_document(
+    request: Request,
+    doc: Document = Depends(get_owned_document),
+    auth: AuthContext = Depends(require_active_doctor_for_documents),
+    db: Session = Depends(get_db),
+) -> DocumentUploadResponse:
+    ip = get_client_ip(request)
+    locked_doc = db.execute(
+        select(Document)
+        .where(Document.id == doc.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if locked_doc is None:
+        raise AppError(ErrorCode.NOT_FOUND, 404, "Document not found.")
+
+    if locked_doc.status == DocumentStatus.LLM_FAILED:
+        if not locked_doc.sanitized_text:
+            raise AppError(ErrorCode.INVALID_STATE, 409, "Sanitized text is unavailable for retry.")
+        fresh_key = str(uuid.uuid4())
+        transition(db, locked_doc.id, {DocumentStatus.LLM_FAILED}, DocumentStatus.SENDING, failure_code=None)
+        llm_req = LLMRequest(
+            document_id=locked_doc.id,
+            idempotency_key=fresh_key,
+            status=LLMRequestStatus.running,
+        )
+        db.add(llm_req)
+        db.flush()
+        audit.record(
+            db,
+            action="DOC_SEND",
+            outcome=AuditOutcome.allowed,
+            actor=auth.user,
+            resource_type="document",
+            resource_id=str(locked_doc.id),
+            ip=ip,
+            metadata={"retry": True},
+        )
+        db.commit()
+        jobs.submit(run_llm_stage, locked_doc.id, llm_req.id)
+        return DocumentUploadResponse(id=locked_doc.id, status=DocumentStatus.SENDING.value)
+
+    if locked_doc.status == DocumentStatus.FAILED:
+        vault_data = vault.get(auth.session_family_id, locked_doc.id)
+        if vault_data is None:
+            raise AppError(ErrorCode.VAULT_EXPIRED, 409, "Session data expired. Upload the file again.")
+        transition(db, locked_doc.id, {DocumentStatus.FAILED}, DocumentStatus.PROCESSING, failure_code=None)
+        db.commit()
+        jobs.submit(run_document_pipeline, locked_doc.id, auth.session_family_id)
+        return DocumentUploadResponse(id=locked_doc.id, status=DocumentStatus.PROCESSING.value)
+
+    raise AppError(ErrorCode.INVALID_STATE, 409, "Document cannot be retried in its current state.")
+
+
+@router.get("/{document_id}/result", response_model=DocumentResultResponse)
+def get_document_result(
+    doc: Document = Depends(get_owned_document),
+    auth: AuthContext = Depends(require_doctor_for_documents),
+    db: Session = Depends(get_db),
+) -> DocumentResultResponse:
+    if doc.status != DocumentStatus.COMPLETED or not doc.llm_response_tokenized:
+        raise AppError(ErrorCode.INVALID_STATE, 409, "Document draft is not yet available.")
+
+    vault_data = vault.get(auth.session_family_id, doc.id)
+    mapping = vault_data.get("mapping") if vault_data is not None else None
+    rehydrated = rehydrate_text(doc.llm_response_tokenized, mapping)
+
+    # Mark REHYDRATE pipeline step succeeded when first served (architecture.md §10)
+    rehydrate_step = db.execute(
+        select(PipelineStep).where(
+            PipelineStep.document_id == doc.id,
+            PipelineStep.step == PipelineStepName.REHYDRATE,
+        )
+    ).scalar_one_or_none()
+    if rehydrate_step is not None and rehydrate_step.status != PipelineStepStatus.succeeded:
+        now = datetime.now(timezone.utc)
+        rehydrate_step.status = PipelineStepStatus.succeeded
+        rehydrate_step.attempts += 1
+        rehydrate_step.started_at = rehydrate_step.started_at or now
+        rehydrate_step.finished_at = now
+        db.commit()
+
+    fallback_row = db.execute(
+        select(AuditLog.id)
+        .where(
+            AuditLog.action == "DOC_LLM_FALLBACK",
+            AuditLog.resource_id == str(doc.id),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+
+    return DocumentResultResponse(
+        document_id=doc.id,
+        text=rehydrated.text,
+        rehydrated=rehydrated.rehydrated,
+        vault_expired=rehydrated.vault_expired or doc.vault_expired,
+        llm_provider_used=doc.llm_provider_used,
+        fallback_used=(fallback_row is not None),
+        warnings=[RehydrateWarning(code=w["code"], token=w["token"]) for w in rehydrated.warnings],
+    )
+
+
+@router.get("/{document_id}/export")
+def export_document_result(
+    request: Request,
+    export_format: Literal["txt", "docx"] = Query(alias="format", default="txt"),
+    doc: Document = Depends(get_owned_document),
+    auth: AuthContext = Depends(require_doctor_for_documents),
+    db: Session = Depends(get_db),
+) -> Response:
+    if doc.status != DocumentStatus.COMPLETED or not doc.llm_response_tokenized:
+        raise AppError(ErrorCode.INVALID_STATE, 409, "Document draft is not yet available.")
+
+    vault_data = vault.get(auth.session_family_id, doc.id)
+    mapping = vault_data.get("mapping") if vault_data is not None else None
+    rehydrated = rehydrate_text(doc.llm_response_tokenized, mapping)
+
+    short_id = str(doc.id)[:8]
+    if export_format == "docx":
+        content = export_docx(rehydrated.text)
+        media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        filename = f"summary-{short_id}.docx"
+    else:
+        content = export_txt(rehydrated.text)
+        media_type = "text/plain; charset=utf-8"
+        filename = f"summary-{short_id}.txt"
+
+    audit.record(
+        db,
+        action="DOC_EXPORT",
+        outcome=AuditOutcome.allowed,
+        actor=auth.user,
+        resource_type="document",
+        resource_id=str(doc.id),
+        ip=get_client_ip(request),
+        metadata={"format": export_format},
+    )
+    db.commit()
+
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.delete("/{document_id}", response_model=MessageResponse)

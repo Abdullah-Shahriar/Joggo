@@ -7,9 +7,9 @@ Read order each session: `brain.md` → `rules.md` → `architecture.md` → `de
 
 ## 1. Status (edit me)
 
-- Current milestone: **M4 (complete — starting M5)**
+- Current milestone: **M5 (complete — starting M6)**
 - Last updated: 2026-11-26
-- Last full test run: pass (26/26 backend pytest against PostgreSQL)
+- Last full test run: pass (31/31 backend pytest against PostgreSQL)
 - Blockers: none
 
 ## 2. Project summary
@@ -81,9 +81,9 @@ Do the milestones in order. Each has a "Done when". Do not start the next until 
 - **Done when:** the Detection, Safety, Pipeline and privacy (P1/T5) tests pass on the three sample PDFs; a seeded leak yields BLOCK and a manual mark clears it.
 
 ### M5 — LLM layer and results (A06, A05, A07)
-- [ ] Providers (Gemini, Groq), router with retries/backoff/Retry-After, circuit breaker, validation + repair, fallback, semaphore, per-user limit
-- [ ] `send` with idempotency and atomic transition; `retry`; `result` (re-hydration); `export` txt/docx
-- [ ] `scripts/smoke_llm.py` (real call, manual)
+- [x] Providers (Gemini, Groq), router with retries/backoff/Retry-After, circuit breaker, validation + repair, fallback, semaphore, per-user limit
+- [x] `send` with idempotency and atomic transition; `retry`; `result` (re-hydration); `export` txt/docx
+- [x] `scripts/smoke_llm.py` (real call, manual)
 - **Done when:** all LLM, Concurrency and Pipeline-failure tests pass; outbound payload test proves no real values leave.
 
 ### M6 — Remaining backend features
@@ -157,3 +157,4 @@ Detection is rule + small-model based and not perfect → mandatory human review
 - 2026-11-26 — M2 — Added auth (signup, login, lockout, refresh rotation + reuse detection, logout, Google ID token login, /me profile/password/sessions), RBAC dependencies, S7 CSRF enforcement, slowapi rate limiting, hash-chained audit service + /api/audit & /api/audit/verify, and M2 tests (18/18 passed).
 - 2026-11-26 — M3 — Added AES-256-GCM in-memory Vault (HKDF, LRU, 20-entry cap, sweeper, startup recovery), atomic state machine, ThreadPoolExecutor jobs, PyMuPDF + Tesseract PDF extraction (annotations, widgets, OCR pages/images, metadata hints), POST /api/documents with all validations and duplicate race handling, scripts/make_sample_pdfs.py, and M3 tests (22/22 passed).
 - 2026-11-26 — M4 — Added HIPAA-18 detection suite (regex, labels, titles, facility, dates/ages, Presidio/spaCy, stoplists, metadata hints, literal sweep, overlap resolution), context-preserving tokenizer, safety gate (literal leak + masked re-detection + pattern checks), 4-step resumable pipeline, manual highlight-to-tokenize with If-Match optimistic locking, approval sha256 check, document review endpoints, and M4 tests (26/26 passed).
+- 2026-11-26 — M5 — Added Gemini & Groq LLM providers, A06 fault-tolerant router (retries, backoff, Retry-After, circuit breaker, output validation + repair retry, provider fallback, semaphore), idempotent send + retry + local re-hydration + TXT/DOCX export, scripts/smoke_llm.py, and M5 tests (31/31 passed).

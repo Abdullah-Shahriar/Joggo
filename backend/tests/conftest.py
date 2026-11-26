@@ -7,6 +7,7 @@ import pytest
 from app.config import get_settings
 from app.main import create_app
 from app.ratelimit import reset_rate_limits
+from app.services.llm.router import reset_breakers
 from app.services.vault import vault
 
 CSRF_HEADERS: dict[str, str] = {
@@ -19,8 +20,10 @@ CSRF_HEADERS: dict[str, str] = {
 def _test_isolation(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(get_settings(), "ENV", "test")
     reset_rate_limits()
+    reset_breakers()
     yield
     reset_rate_limits()
+    reset_breakers()
     vault.clear_all_for_tests()
 
 
