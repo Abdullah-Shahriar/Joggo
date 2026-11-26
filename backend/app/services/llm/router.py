@@ -49,6 +49,7 @@ class ProviderAttemptSummary:
     latency_ms: int
     error_code: str | None
     succeeded: bool
+    detail: str | None = None
 
 
 @dataclass(frozen=True)
@@ -121,6 +122,7 @@ def route_generate(
                     latency_ms=0,
                     error_code=ErrorCode.LLM_UNAVAILABLE.value,
                     succeeded=False,
+                    detail="Temporarily paused after repeated errors (circuit breaker open); retry in 30s.",
                 )
             )
             continue
@@ -129,6 +131,7 @@ def route_generate(
         provider_latency = 0
         provider_model: str | None = None
         provider_error: ErrorCode | None = None
+        provider_detail: str | None = None
         succeeded_result: LLMResult | None = None
 
         for attempt in range(MAX_ATTEMPTS_PER_PROVIDER):
@@ -141,8 +144,12 @@ def route_generate(
                 provider_model = res.model
             except LLMProviderError as exc:
                 provider_error = exc.code
-                last_error_code = exc.code
-                breaker.record_failure()
+                provider_detail = exc.message
+                is_unconfigured = "not configured" in exc.message.lower()
+                if not is_unconfigured or last_error_code == ErrorCode.LLM_UNAVAILABLE:
+                    last_error_code = exc.code
+                if not is_unconfigured:
+                    breaker.record_failure()
                 logger.warning(
                     "LLM provider attempt failed",
                     extra={
@@ -150,6 +157,7 @@ def route_generate(
                         "provider": provider.name,
                         "attempts": provider_attempts,
                         "error_code": exc.code.value,
+                        "detail": exc.message,
                     },
                 )
                 if not exc.retryable or attempt >= (MAX_ATTEMPTS_PER_PROVIDER - 1):
@@ -205,11 +213,13 @@ def route_generate(
                     },
                 )
                 provider_error = ErrorCode.LLM_MALFORMED_RESPONSE
+                provider_detail = f"{provider.name} ({repaired.model}): {repair_reason or 'invalid output format'}"
                 last_error_code = ErrorCode.LLM_MALFORMED_RESPONSE
                 breaker.record_failure()
                 break
             except LLMProviderError as exc:
                 provider_error = exc.code
+                provider_detail = exc.message
                 last_error_code = exc.code
                 breaker.record_failure()
                 break
@@ -240,6 +250,7 @@ def route_generate(
                 latency_ms=provider_latency,
                 error_code=provider_error.value if provider_error else ErrorCode.LLM_UNAVAILABLE.value,
                 succeeded=False,
+                detail=provider_detail,
             )
         )
 

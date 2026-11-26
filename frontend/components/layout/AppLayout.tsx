@@ -60,6 +60,12 @@ export function AppLayout({
   }, [isLoading, user, pathname, router]);
 
   useEffect(() => {
+    if (!isLoading && user && pathname === "/dashboard" && user.role !== "doctor") {
+      router.replace(getRoleHome(user.role));
+    }
+  }, [isLoading, user, pathname, router]);
+
+  useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
         setProfileOpen(false);
@@ -73,9 +79,8 @@ export function AppLayout({
     return <BrandLoader fullScreen label="Loading…" />;
   }
 
-  // If middleware sent an admin or auditor to /dashboard from a public route, bounce to role home
+  // If middleware sent an admin or auditor to /dashboard from a public route, show loader while effect redirects
   if (pathname === "/dashboard" && user.role !== "doctor") {
-    router.replace(getRoleHome(user.role));
     return <BrandLoader fullScreen label="Redirecting…" />;
   }
 

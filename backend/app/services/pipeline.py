@@ -606,10 +606,17 @@ def run_llm_stage(doc_id: uuid.UUID, llm_request_id: uuid.UUID) -> None:
                 llm_req.latency_ms = total_latency
                 llm_req.error_code = exc.failure_code.value
 
+            detail_parts = [
+                f"{item.provider}: {item.detail}" if item.detail else f"{item.provider}: {item.error_code or 'failed'}"
+                for item in exc.history
+                if not item.succeeded
+            ]
+            safe_detail = "; ".join(detail_parts)[:500] if detail_parts else "Could not generate a draft from AI providers."
+
             llm_step = _get_step(db, doc_id, PipelineStepName.LLM_CALL)
             llm_step.status = PipelineStepStatus.failed
             llm_step.error_code = exc.failure_code.value
-            llm_step.error_message = "Could not generate a draft from AI providers."
+            llm_step.error_message = safe_detail
             llm_step.finished_at = datetime.now(timezone.utc)
 
             doc = db.get(Document, doc_id)

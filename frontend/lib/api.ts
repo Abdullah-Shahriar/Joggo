@@ -106,7 +106,14 @@ async function parseError(res: Response): Promise<ApiError> {
 function redirectToLogin(): void {
   if (typeof window === "undefined") return;
   const current = window.location.pathname + window.location.search;
-  if (current.startsWith("/login") || current.startsWith("/signup")) return;
+  if (
+    current.startsWith("/login") ||
+    current.startsWith("/signup") ||
+    current.startsWith("/00admin/00admin") ||
+    current.startsWith("/00auditor")
+  ) {
+    return;
+  }
   const next = encodeURIComponent(current);
   window.location.href = `/login?next=${next}`;
 }

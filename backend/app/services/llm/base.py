@@ -5,7 +5,7 @@ import httpx
 
 from app.errors import ErrorCode
 
-DEFAULT_LLM_TIMEOUT = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
+DEFAULT_LLM_TIMEOUT = httpx.Timeout(connect=10.0, read=45.0, write=10.0, pool=10.0)
 
 
 @dataclass(frozen=True)

@@ -57,16 +57,20 @@ def verify_csrf(request: Request) -> None:
         raise AppError(ErrorCode.CSRF_REJECTED, 403, "Request blocked by CSRF protection.")
 
     settings = get_settings()
-    expected_origin = settings.FRONTEND_ORIGIN.rstrip("/")
+    allowed_origins = {
+        part.strip().rstrip("/")
+        for part in settings.FRONTEND_ORIGIN.split(",")
+        if part.strip()
+    }
     origin = (request.headers.get("origin") or "").rstrip("/")
     if origin:
-        if origin != expected_origin:
+        if origin not in allowed_origins:
             raise AppError(ErrorCode.CSRF_REJECTED, 403, "Request origin is not allowed.")
         return
 
     # Some browsers/proxies omit Origin on same-origin bodyless DELETE requests; allow matching Referer.
     referer = (request.headers.get("referer") or "").strip()
-    if referer and (referer == expected_origin or referer.startswith(f"{expected_origin}/")):
+    if referer and any(referer == ao or referer.startswith(f"{ao}/") for ao in allowed_origins):
         return
 
     raise AppError(ErrorCode.CSRF_REJECTED, 403, "Request origin is not allowed.")

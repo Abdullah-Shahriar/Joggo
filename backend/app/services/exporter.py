@@ -15,6 +15,22 @@ def export_txt(text: str) -> bytes:
     return text.encode("utf-8")
 
 
+def _add_docx_inline_runs(paragraph, raw: str) -> None:
+    """Populate a python-docx paragraph with clean **bold** and _italic_ runs."""
+    tokens = re.split(r"(\*\*[^*]+\*\*|_[^_]+_)", raw)
+    for tok in tokens:
+        if not tok:
+            continue
+        if tok.startswith("**") and tok.endswith("**") and len(tok) > 4:
+            run = paragraph.add_run(tok[2:-2])
+            run.bold = True
+        elif tok.startswith("_") and tok.endswith("_") and len(tok) > 2:
+            run = paragraph.add_run(tok[1:-1])
+            run.italic = True
+        else:
+            paragraph.add_run(tok)
+
+
 def export_docx(text: str) -> bytes:
     """Render clinical summary Markdown into a clean DOCX with empty headers/footers (architecture.md §18)."""
     doc = DocxDocument()
@@ -30,16 +46,21 @@ def export_docx(text: str) -> bytes:
 
     for raw_line in text.splitlines():
         line = raw_line.strip()
-        if not line:
+        if not line or re.match(r"^[-_]{3,}$", line):
             continue
-        if line.startswith("## "):
-            doc.add_heading(line[3:].strip(), level=2)
-        elif line.startswith("# "):
-            doc.add_heading(line[2:].strip(), level=1)
-        elif line.startswith("- ") or line.startswith("* "):
-            doc.add_paragraph(line[2:].strip(), style="List Bullet")
-        else:
-            doc.add_paragraph(line)
+        h_match = re.match(r"^(#{1,4})\s+(.*)$", line)
+        if h_match:
+            level = min(len(h_match.group(1)), 3)
+            heading_text = re.sub(r"\*\*([^*]+)\*\*", r"\1", h_match.group(2).strip())
+            doc.add_heading(heading_text, level=level)
+            continue
+        b_match = re.match(r"^[-*•]\s+(.*)$", line)
+        if b_match:
+            p = doc.add_paragraph(style="List Bullet")
+            _add_docx_inline_runs(p, b_match.group(1).strip())
+            continue
+        p = doc.add_paragraph()
+        _add_docx_inline_runs(p, line)
 
     buf = io.BytesIO()
     doc.save(buf)
@@ -47,9 +68,11 @@ def export_docx(text: str) -> bytes:
 
 
 def _markdown_inline_to_reportlab(raw: str) -> str:
-    """Safely escape XML and convert **bold** spans for ReportLab Paragraph."""
+    """Safely escape XML and convert **bold** and _italic_ spans for ReportLab Paragraph."""
     escaped = xml_escape(raw)
-    return re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", escaped)
+    escaped = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", escaped)
+    escaped = re.sub(r"(?<!\w)_([^_]+)_(?!\w)", r"<i>\1</i>", escaped)
+    return escaped
 
 
 def export_pdf(text: str) -> bytes:

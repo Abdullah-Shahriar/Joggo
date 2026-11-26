@@ -136,6 +136,63 @@ def test_gemini_and_groq_providers_http_mapping(monkeypatch: pytest.MonkeyPatch)
     valid, reason = validate_llm_output(res_thought.text, TaskType.case_summary)
     assert valid is True, reason
 
+    # Auto-model discovery fallback when configured model returns 404 (Gemini & Groq)
+    gem_404 = GeminiProvider(api_key="test-gem-key", model="gemini-retired-model")
+    gem_post_calls = {"n": 0}
+
+    def fake_gem_post(self, url, *, json=None, headers=None, **kwargs):
+        gem_post_calls["n"] += 1
+        if "gemini-retired-model" in url:
+            return _DummyHTTPResponse(404, {"error": {"status": "NOT_FOUND", "message": "model not found"}})
+        assert "gemini-2.5-flash" in url
+        return _DummyHTTPResponse(200, {"candidates": [{"content": {"parts": [{"text": "## Summary\nAuto-switched"}]}}]})
+
+    def fake_gem_get(self, url, *, headers=None, **kwargs):
+        return _DummyHTTPResponse(
+            200,
+            {
+                "models": [
+                    {"name": "models/gemini-2.5-flash", "supportedGenerationMethods": ["generateContent"]},
+                    {"name": "models/text-embedding-004", "supportedGenerationMethods": ["embedContent"]},
+                ]
+            },
+        )
+
+    monkeypatch.setattr(httpx.Client, "post", fake_gem_post)
+    monkeypatch.setattr(httpx.Client, "get", fake_gem_get)
+    res_auto_gem = gem_404.generate("sys", "usr")
+    assert res_auto_gem.model == "gemini-2.5-flash"
+    assert res_auto_gem.text == "## Summary\nAuto-switched"
+    assert gem_post_calls["n"] == 2
+
+    groq_400 = GroqProvider(api_key="test-groq-key", model="llama3-retired")
+    groq_post_calls = {"n": 0}
+
+    def fake_groq_post(self, url, *, json=None, headers=None, **kwargs):
+        groq_post_calls["n"] += 1
+        if json and json.get("model") == "llama3-retired":
+            return _DummyHTTPResponse(400, {"error": {"code": "model_decommissioned", "message": "Model decommissioned"}})
+        assert json and json.get("model") == "openai/gpt-oss-120b"
+        return _DummyHTTPResponse(200, {"choices": [{"message": {"content": "## Summary\nGroq auto-switched"}}]})
+
+    def fake_groq_get(self, url, *, headers=None, **kwargs):
+        return _DummyHTTPResponse(
+            200,
+            {
+                "data": [
+                    {"id": "whisper-large-v3", "active": True},
+                    {"id": "openai/gpt-oss-120b", "active": True},
+                ]
+            },
+        )
+
+    monkeypatch.setattr(httpx.Client, "post", fake_groq_post)
+    monkeypatch.setattr(httpx.Client, "get", fake_groq_get)
+    res_auto_groq = groq_400.generate("sys", "usr")
+    assert res_auto_groq.model == "openai/gpt-oss-120b"
+    assert res_auto_groq.text == "## Summary\nGroq auto-switched"
+    assert groq_post_calls["n"] == 2
+
 
 def test_session_revoke_audit_filters_and_failed_retry_vault_expired(app: FastAPI) -> None:
     email_doc = f"m7-doc-{uuid.uuid4().hex[:8]}@example.com"

@@ -295,17 +295,19 @@ def extract_image(
     start = time.monotonic()
 
     try:
-        pil_img = Image.open(io.BytesIO(image_bytes))
-        pil_img = ImageOps.exif_transpose(pil_img)
+        raw_img = Image.open(io.BytesIO(image_bytes))
+        raw_info = dict(raw_img.info or {})
+        raw_exif = raw_img.getexif()
+        pil_img = ImageOps.exif_transpose(raw_img)
         if pil_img.mode not in {"RGB", "L"}:
             pil_img = pil_img.convert("RGB")
     except Exception as exc:
         raise ExtractionError(ErrorCode.PDF_CORRUPT, "The uploaded image could not be opened.") from exc
 
     hints_set: dict[str, None] = {}
-    # PNG text chunks & general info
+    # PNG text chunks & general info (read before exif_transpose/convert strips metadata)
     for key in ("Author", "author", "Creator", "creator", "Artist", "artist"):
-        val = pil_img.info.get(key)
+        val = raw_info.get(key)
         if isinstance(val, str):
             cleaned = _clean_hint(val)
             if cleaned:
@@ -313,9 +315,8 @@ def extract_image(
 
     # EXIF Artist / Author tags (JPEG)
     try:
-        exif = pil_img.getexif()
-        if exif:
-            for tag_id, val in exif.items():
+        if raw_exif:
+            for tag_id, val in raw_exif.items():
                 tag_name = ExifTags.TAGS.get(tag_id, "")
                 if tag_name in {"Artist", "XPAuthor", "Author"} and isinstance(val, (str, bytes)):
                     raw_val = val.decode("utf-16le", errors="ignore").rstrip("\x00") if isinstance(val, bytes) else val

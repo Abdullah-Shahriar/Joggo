@@ -42,6 +42,13 @@ export function GoogleSignInButton({
   const [configChecked, setConfigChecked] = useState<boolean>(Boolean(buildTimeId));
   const [scriptLoaded, setScriptLoaded] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const onSuccessRef = useRef(onSuccess);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+    onErrorRef.current = onError;
+  }, [onSuccess, onError]);
 
   // Fetch runtime Google Client ID from backend (/api/auth/config) if not baked at build time
   useEffect(() => {
@@ -90,7 +97,7 @@ export function GoogleSignInButton({
       client_id: clientId,
       callback: async (resp) => {
         if (!resp.credential) {
-          onError("Google sign-in did not return a valid credential.");
+          onErrorRef.current("Google sign-in did not return a valid credential.");
           return;
         }
         try {
@@ -99,9 +106,9 @@ export function GoogleSignInButton({
             body: { credential: resp.credential, portal },
             silentErrorToast: true,
           });
-          onSuccess(data.user);
+          onSuccessRef.current(data.user);
         } catch (err) {
-          onError(err instanceof Error ? err.message : "Google sign-in failed.");
+          onErrorRef.current(err instanceof Error ? err.message : "Google sign-in failed.");
         }
       },
     });
@@ -112,7 +119,7 @@ export function GoogleSignInButton({
       width: btnWidth,
       text: mode === "signup" ? "signup_with" : "continue_with",
     });
-  }, [clientId, scriptLoaded, portal, mode, onSuccess, onError]);
+  }, [clientId, scriptLoaded, portal, mode]);
 
   if (!configChecked) {
     return (

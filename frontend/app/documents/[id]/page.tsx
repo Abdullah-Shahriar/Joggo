@@ -338,13 +338,20 @@ function renderModifiedPdfLines(
 }
 
 function renderInlineBold(text: string) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  const parts = text.split(/(\*\*[^*]+\*\*|_[^_]+_)/g);
   return parts.map((part, idx) => {
     if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
       return (
         <strong key={idx} className="font-semibold text-text">
           {part.slice(2, -2)}
         </strong>
+      );
+    }
+    if (part.startsWith("_") && part.endsWith("_") && part.length > 2) {
+      return (
+        <em key={idx} className="italic text-text-muted">
+          {part.slice(1, -1)}
+        </em>
       );
     }
     return <Fragment key={idx}>{part}</Fragment>;
@@ -428,6 +435,7 @@ function DocumentReviewContent() {
   const [fixingFindingIdx, setFixingFindingIdx] = useState<number | null>(null);
   const [autoFixingAll, setAutoFixingAll] = useState(false);
   const [autoFixProgress, setAutoFixProgress] = useState<{ done: number; total: number } | null>(null);
+  const [exportingFormat, setExportingFormat] = useState<string | null>(null);
 
   const resultSectionRef = useRef<HTMLElement>(null);
   const cleanedRef = useRef<HTMLDivElement>(null);
@@ -577,8 +585,9 @@ function DocumentReviewContent() {
 
   const retryMutation = useMutation({
     mutationFn: () => apiRequest(`/documents/${docId}/retry`, { method: "POST" }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["document", docId] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["document", docId] });
+      await queryClient.refetchQueries({ queryKey: ["document", docId] });
     },
   });
 
@@ -772,13 +781,22 @@ function DocumentReviewContent() {
   };
 
   const handleExport = async (fmt: "pdf" | "png" | "jpg" | "txt" | "docx") => {
-    const { blob, filename } = await apiBlob(`/documents/${docId}/export?format=${fmt}`);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename || `summary.${fmt}`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setExportingFormat(fmt);
+    try {
+      const { blob, filename } = await apiBlob(`/documents/${docId}/export?format=${fmt}`);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || `summary.${fmt}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      // apiBlob already emits error toast
+    } finally {
+      setExportingFormat(null);
+    }
   };
 
   const handleCopy = async () => {
@@ -839,6 +857,7 @@ function DocumentReviewContent() {
   const findings = sanitizedData?.findings || [];
   const hasSafetyIssues = findings.length > 0;
   const safetyPass = doc.safety_report?.status === "PASS";
+  const llmStepError = doc.steps.find((s) => s.step === "LLM_CALL")?.error_message || null;
   const vaultExpiredBeforeApproval =
     doc.vault_expired && ["BLOCKED", "REVIEW_REQUIRED", "APPROVED", "FAILED"].includes(doc.status);
   const canApproveAndSend =
@@ -1412,23 +1431,53 @@ function DocumentReviewContent() {
                 <Copy className="h-3.5 w-3.5" aria-hidden="true" />
                 Copy
               </Button>
-              <Button variant="primary" size="sm" onClick={() => handleExport("pdf")}>
+              <Button
+                variant="primary"
+                size="sm"
+                loading={exportingFormat === "pdf"}
+                disabled={exportingFormat !== null && exportingFormat !== "pdf"}
+                onClick={() => void handleExport("pdf")}
+              >
                 <Download className="h-3.5 w-3.5" aria-hidden="true" />
                 PDF
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => handleExport("png")}>
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={exportingFormat === "png"}
+                disabled={exportingFormat !== null && exportingFormat !== "png"}
+                onClick={() => void handleExport("png")}
+              >
                 <Download className="h-3.5 w-3.5" aria-hidden="true" />
                 PNG
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => handleExport("jpg")}>
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={exportingFormat === "jpg"}
+                disabled={exportingFormat !== null && exportingFormat !== "jpg"}
+                onClick={() => void handleExport("jpg")}
+              >
                 <Download className="h-3.5 w-3.5" aria-hidden="true" />
                 JPG
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => handleExport("docx")}>
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={exportingFormat === "docx"}
+                disabled={exportingFormat !== null && exportingFormat !== "docx"}
+                onClick={() => void handleExport("docx")}
+              >
                 <Download className="h-3.5 w-3.5" aria-hidden="true" />
                 DOCX
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => handleExport("txt")}>
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={exportingFormat === "txt"}
+                disabled={exportingFormat !== null && exportingFormat !== "txt"}
+                onClick={() => void handleExport("txt")}
+              >
                 <Download className="h-3.5 w-3.5" aria-hidden="true" />
                 TXT
               </Button>
@@ -1452,6 +1501,11 @@ function DocumentReviewContent() {
                         ? "The AI writing service returned an incomplete draft format. Please click Try again."
                         : "The AI writing service is currently unavailable. Verify that GEMINI_API_KEY or GROQ_API_KEY is set on the server, or try again in a moment."}
                 </p>
+                {llmStepError && (
+                  <p className="mt-2 rounded border border-danger/25 bg-bg px-2.5 py-1.5 font-mono text-xs text-danger">
+                    {llmStepError}
+                  </p>
+                )}
                 {doc.failure_code && (
                   <p className="mt-1.5 text-xs font-medium text-danger/80">
                     Error code: {doc.failure_code}

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import math
 import re
+from typing import Any
 import uuid
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_db
 from app.deps import get_client_ip, trigger_session_wipe
-from app.errors import AppError, ErrorCode
+from app.errors import AppError, ErrorCode, build_error_response
 from app.models.audit import AuditOutcome
 from app.models.session import SessionRecord
 from app.models.user import User, UserRole, UserStatus
@@ -352,16 +353,22 @@ def google_login(
     return AuthSessionResponse(user=serialize_user(user))
 
 
+def _unauthorized_clear_cookies(code: ErrorCode, message: str) -> Response:
+    err_resp = build_error_response(code, 401, message)
+    clear_auth_cookies(err_resp)
+    return err_resp
+
+
 @router.post("/refresh", response_model=AuthSessionResponse)
 @limiter.limit("10/minute")
 def refresh_session(
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
-) -> AuthSessionResponse:
+) -> Any:
     raw_refresh = request.cookies.get(REFRESH_COOKIE_NAME)
     if not raw_refresh:
-        raise AppError(ErrorCode.UNAUTHENTICATED, 401, "Authentication required.")
+        return _unauthorized_clear_cookies(ErrorCode.UNAUTHENTICATED, "Authentication required.")
 
     ip = get_client_ip(request)
     now = datetime.now(timezone.utc)
@@ -371,13 +378,11 @@ def refresh_session(
         select(SessionRecord).where(SessionRecord.token_hash == token_hash).with_for_update()
     ).scalar_one_or_none()
     if session_row is None:
-        clear_auth_cookies(response)
-        raise AppError(ErrorCode.UNAUTHENTICATED, 401, "Authentication required.")
+        return _unauthorized_clear_cookies(ErrorCode.UNAUTHENTICATED, "Authentication required.")
 
     user = db.get(User, session_row.user_id)
     if user is None:
-        clear_auth_cookies(response)
-        raise AppError(ErrorCode.UNAUTHENTICATED, 401, "Authentication required.")
+        return _unauthorized_clear_cookies(ErrorCode.UNAUTHENTICATED, "Authentication required.")
 
     # Rules.md S2: Reuse of a revoked refresh token revokes the entire session family and wipes its vault.
     if session_row.revoked_at is not None:
@@ -400,18 +405,18 @@ def refresh_session(
         )
         db.commit()
         trigger_session_wipe(session_row.family_id)
-        clear_auth_cookies(response)
-        raise AppError(
+        return _unauthorized_clear_cookies(
             ErrorCode.SESSION_REVOKED,
-            401,
             "Session revoked due to suspicious token reuse. Please sign in again.",
         )
 
     if session_row.expires_at <= now:
         session_row.revoked_at = now
         db.commit()
-        clear_auth_cookies(response)
-        raise AppError(ErrorCode.TOKEN_EXPIRED, 401, "Session expired. Please sign in again.")
+        return _unauthorized_clear_cookies(
+            ErrorCode.TOKEN_EXPIRED,
+            "Session expired. Please sign in again.",
+        )
 
     new_session = _create_session_and_set_cookies(
         db=db,
