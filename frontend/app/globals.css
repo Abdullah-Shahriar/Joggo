@@ -120,6 +120,15 @@
   }
 }
 
+@keyframes joggo-handoff-fill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
 .cs-brand-ring {
   animation: cs-spin 1.2s linear infinite;
   transform-origin: center;
