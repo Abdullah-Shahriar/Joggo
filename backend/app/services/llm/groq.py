@@ -1,3 +1,4 @@
+import logging
 import time
 
 import httpx
@@ -5,7 +6,11 @@ import httpx
 from app.config import get_settings
 from app.errors import ErrorCode
 from app.services.llm.base import DEFAULT_LLM_TIMEOUT, LLMProvider, LLMProviderError, LLMResult
-from app.services.llm.gemini import _parse_retry_after
+from app.services.llm.gemini import _parse_retry_after, _resolve_model
+
+logger = logging.getLogger("app.llm.groq")
+
+DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
 
 
 class GroqProvider(LLMProvider):
@@ -13,8 +18,8 @@ class GroqProvider(LLMProvider):
 
     def __init__(self, *, api_key: str | None = None, model: str | None = None) -> None:
         settings = get_settings()
-        self._api_key = api_key if api_key is not None else settings.GROQ_API_KEY
-        self._model = model if model is not None else settings.GROQ_MODEL
+        self._api_key = (api_key if api_key is not None else settings.GROQ_API_KEY).strip()
+        self._model = _resolve_model(model, settings.GROQ_MODEL, DEFAULT_GROQ_MODEL)
 
     def generate(
         self,
@@ -38,7 +43,7 @@ class GroqProvider(LLMProvider):
                 {"role": "user", "content": user},
             ],
             "temperature": 0.2,
-            "max_tokens": 2000,
+            "max_tokens": 3000,
         }
         start = time.perf_counter()
 
@@ -63,6 +68,17 @@ class GroqProvider(LLMProvider):
             ) from exc
 
         latency_ms = int((time.perf_counter() - start) * 1000)
+
+        if resp.status_code >= 400:
+            logger.warning(
+                "Groq API returned error status",
+                extra={
+                    "event": "llm_provider_http_error",
+                    "provider": self.name,
+                    "model": self._model,
+                    "status_code": resp.status_code,
+                },
+            )
 
         if resp.status_code in {400, 401, 403}:
             raise LLMProviderError(

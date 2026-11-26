@@ -33,7 +33,9 @@ def validate_llm_output(text: str, task_type: TaskType) -> tuple[bool, str | Non
 
     required = TASK_HEADINGS[task_type]
     for heading in required:
-        heading_re = re.compile(rf"(?im)^\s*##\s+{re.escape(heading)}\s*$")
+        heading_re = re.compile(
+            rf"(?im)^\s*#{{1,4}}\s*(?:\d+[\.\)]\s*)?(?:\*\*|__)?\s*{re.escape(heading)}\s*(?:\*\*|__)?\s*:?\s*$"
+        )
         if not heading_re.search(stripped):
             return False, f"Missing required heading: ## {heading}"
 

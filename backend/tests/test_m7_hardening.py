@@ -11,8 +11,9 @@ from app.errors import ErrorCode
 from app.models import Document, DocumentStatus, TaskType, User, UserRole, UserStatus
 from app.security import hash_password
 from app.services.llm.base import LLMProviderError
-from app.services.llm.gemini import GeminiProvider
-from app.services.llm.groq import GroqProvider
+from app.services.llm.gemini import DEFAULT_GEMINI_MODEL, GeminiProvider
+from app.services.llm.groq import DEFAULT_GROQ_MODEL, GroqProvider
+from app.services.llm.validate import validate_llm_output
 from app.services.vault import vault
 from tests.conftest import CSRF_HEADERS
 
@@ -100,6 +101,40 @@ def test_gemini_and_groq_providers_http_mapping(monkeypatch: pytest.MonkeyPatch)
         groq.generate("sys", "usr")
     assert e_503.value.code == ErrorCode.LLM_UNAVAILABLE
     assert e_503.value.retryable is True
+
+    # Default model fallback when env model is empty or placeholder, plus Gemini thought-part filtering
+    monkeypatch.setattr("app.services.llm.gemini.get_settings", lambda: type("S", (), {"GEMINI_API_KEY": "k1", "GEMINI_MODEL": ""})())
+    monkeypatch.setattr("app.services.llm.groq.get_settings", lambda: type("S", (), {"GROQ_API_KEY": "k2", "GROQ_MODEL": "<placeholder>"})())
+    gem_default = GeminiProvider()
+    groq_default = GroqProvider()
+    assert gem_default._model == DEFAULT_GEMINI_MODEL
+    assert groq_default._model == DEFAULT_GROQ_MODEL
+
+    monkeypatch.setattr(
+        httpx.Client,
+        "post",
+        make_fake_post(
+            _DummyHTTPResponse(
+                200,
+                {
+                    "candidates": [
+                        {
+                            "content": {
+                                "parts": [
+                                    {"text": "internal reasoning", "thought": True},
+                                    {"text": "### Summary:\nClean clinical summary.\n\n## **Key findings**\nStable.\n\n## 3. Concerns:\nNone."},
+                                ]
+                            }
+                        }
+                    ]
+                },
+            )
+        ),
+    )
+    res_thought = gem_default.generate("sys", "usr")
+    assert "internal reasoning" not in res_thought.text
+    valid, reason = validate_llm_output(res_thought.text, TaskType.case_summary)
+    assert valid is True, reason
 
 
 def test_session_revoke_audit_filters_and_failed_retry_vault_expired(app: FastAPI) -> None:

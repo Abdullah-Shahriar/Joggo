@@ -1,3 +1,4 @@
+import logging
 import time
 
 import httpx
@@ -5,6 +6,19 @@ import httpx
 from app.config import get_settings
 from app.errors import ErrorCode
 from app.services.llm.base import DEFAULT_LLM_TIMEOUT, LLMProvider, LLMProviderError, LLMResult
+
+logger = logging.getLogger("app.llm.gemini")
+
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+
+
+def _resolve_model(explicit_model: str | None, configured_model: str, default_model: str) -> str:
+    if explicit_model is not None:
+        return explicit_model.strip()
+    cleaned = (configured_model or "").strip()
+    if not cleaned or cleaned.startswith("<"):
+        return default_model
+    return cleaned
 
 
 def _parse_retry_after(header_val: str | None) -> float | None:
@@ -22,8 +36,8 @@ class GeminiProvider(LLMProvider):
 
     def __init__(self, *, api_key: str | None = None, model: str | None = None) -> None:
         settings = get_settings()
-        self._api_key = api_key if api_key is not None else settings.GEMINI_API_KEY
-        self._model = model if model is not None else settings.GEMINI_MODEL
+        self._api_key = (api_key if api_key is not None else settings.GEMINI_API_KEY).strip()
+        self._model = _resolve_model(model, settings.GEMINI_MODEL, DEFAULT_GEMINI_MODEL)
 
     def generate(
         self,
@@ -45,7 +59,7 @@ class GeminiProvider(LLMProvider):
             "contents": [{"role": "user", "parts": [{"text": user}]}],
             "generationConfig": {
                 "temperature": 0.2,
-                "maxOutputTokens": 2000,
+                "maxOutputTokens": 4096,
             },
         }
         start = time.perf_counter()
@@ -71,6 +85,17 @@ class GeminiProvider(LLMProvider):
             ) from exc
 
         latency_ms = int((time.perf_counter() - start) * 1000)
+
+        if resp.status_code >= 400:
+            logger.warning(
+                "Gemini API returned error status",
+                extra={
+                    "event": "llm_provider_http_error",
+                    "provider": self.name,
+                    "model": self._model,
+                    "status_code": resp.status_code,
+                },
+            )
 
         if resp.status_code in {400, 401, 403}:
             raise LLMProviderError(
@@ -102,7 +127,7 @@ class GeminiProvider(LLMProvider):
             data = resp.json()
             candidates = data.get("candidates") or []
             parts = candidates[0]["content"]["parts"]
-            text = "".join(str(p.get("text", "")) for p in parts)
+            text = "".join(str(p.get("text", "")) for p in parts if not p.get("thought"))
         except Exception as exc:
             raise LLMProviderError(
                 ErrorCode.LLM_MALFORMED_RESPONSE,

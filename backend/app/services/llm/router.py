@@ -158,7 +158,7 @@ def route_generate(
                 continue
 
             # Output validation + single repair retry on same provider (architecture.md §16)
-            valid, _reason = validate_llm_output(res.text, task_type)
+            valid, validation_reason = validate_llm_output(res.text, task_type)
             if valid:
                 breaker.record_success()
                 succeeded_result = LLMResult(
@@ -169,6 +169,15 @@ def route_generate(
                 )
                 break
 
+            logger.warning(
+                "LLM output failed validation; attempting repair",
+                extra={
+                    "event": "llm_output_invalid",
+                    "provider": provider.name,
+                    "reason": validation_reason,
+                },
+            )
+
             # Repair retry once on the same provider
             provider_attempts += 1
             total_attempts += 1
@@ -177,7 +186,7 @@ def route_generate(
                     repaired = provider.generate(SYSTEM_PROMPT, repair_prompt)
                 provider_latency += repaired.latency_ms
                 provider_model = repaired.model
-                valid_repair, _reason2 = validate_llm_output(repaired.text, task_type)
+                valid_repair, repair_reason = validate_llm_output(repaired.text, task_type)
                 if valid_repair:
                     breaker.record_success()
                     succeeded_result = LLMResult(
@@ -187,6 +196,14 @@ def route_generate(
                         provider=provider.name,
                     )
                     break
+                logger.warning(
+                    "LLM repair output failed validation",
+                    extra={
+                        "event": "llm_repair_invalid",
+                        "provider": provider.name,
+                        "reason": repair_reason,
+                    },
+                )
                 provider_error = ErrorCode.LLM_MALFORMED_RESPONSE
                 last_error_code = ErrorCode.LLM_MALFORMED_RESPONSE
                 breaker.record_failure()
@@ -228,7 +245,12 @@ def route_generate(
 
     final_code = (
         last_error_code
-        if last_error_code in {ErrorCode.LLM_TIMEOUT, ErrorCode.LLM_MALFORMED_RESPONSE}
+        if last_error_code
+        in {
+            ErrorCode.LLM_TIMEOUT,
+            ErrorCode.LLM_MALFORMED_RESPONSE,
+            ErrorCode.LLM_AUTH_ERROR,
+        }
         else ErrorCode.LLM_UNAVAILABLE
     )
     raise LLMRouterError(final_code, history)

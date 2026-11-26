@@ -537,11 +537,23 @@ function DocumentReviewContent() {
 
   const approveAndSendMutation = useMutation({
     mutationFn: async () => {
-      if (!doc || !sanitizedData) return;
+      if (!doc) return;
+      if (doc.status === "LLM_FAILED") {
+        await apiRequest(`/documents/${docId}/retry`, { method: "POST" });
+        return;
+      }
       if (doc.status === "REVIEW_REQUIRED") {
+        const freshSan = await apiRequest<SanitizedTextResponse>(`/documents/${docId}/sanitized`, {
+          silentErrorToast: true,
+        }).catch(() => null);
+        const latestSha =
+          freshSan?.sanitized_sha256 || doc.sanitized_sha256 || sanitizedData?.sanitized_sha256;
+        if (!latestSha) {
+          throw new Error("Cleaned document hash is not ready yet.");
+        }
         await apiRequest(`/documents/${docId}/approve`, {
           method: "POST",
-          body: { sanitized_sha256: sanitizedData.sanitized_sha256 },
+          body: { sanitized_sha256: latestSha },
         });
       }
       const idemKey =
@@ -553,9 +565,10 @@ function DocumentReviewContent() {
         headers: { "Idempotency-Key": idemKey },
       });
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       setMobileTab("result");
-      queryClient.invalidateQueries({ queryKey: ["document", docId] });
+      await queryClient.invalidateQueries({ queryKey: ["document", docId] });
+      await queryClient.refetchQueries({ queryKey: ["document", docId] });
       setTimeout(() => {
         resultSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 100);
@@ -832,7 +845,7 @@ function DocumentReviewContent() {
     safetyPass &&
     !vaultExpiredBeforeApproval &&
     (doc.status === "REVIEW_REQUIRED" || doc.status === "APPROVED") &&
-    Boolean(sanitizedData?.sanitized_sha256);
+    Boolean(doc.sanitized_sha256 || sanitizedData?.sanitized_sha256);
 
   const currentStageLabel =
     currentStageIdx < TRACKER_STAGES.length ? TRACKER_STAGES[currentStageIdx].label : "Complete";
@@ -1429,7 +1442,21 @@ function DocumentReviewContent() {
               <BrandLoader label="Writing clinical draft (Step 6 of 6)…" />
             ) : doc.status === "LLM_FAILED" ? (
               <div role="alert" className="rounded bg-danger-tint p-4 text-sm text-danger">
-                <p className="font-medium">Could not write the draft right now.</p>
+                <p className="font-semibold">Could not write the draft right now.</p>
+                <p className="mt-1 text-danger/90">
+                  {doc.failure_code === "LLM_AUTH_ERROR"
+                    ? "The AI writing service is not configured or rejected the API key. Add a valid GEMINI_API_KEY or GROQ_API_KEY in your server environment, restart the backend, and click Try again."
+                    : doc.failure_code === "LLM_TIMEOUT"
+                      ? "The AI writing service timed out before finishing the draft. Please click Try again."
+                      : doc.failure_code === "LLM_MALFORMED_RESPONSE"
+                        ? "The AI writing service returned an incomplete draft format. Please click Try again."
+                        : "The AI writing service is currently unavailable. Verify that GEMINI_API_KEY or GROQ_API_KEY is set on the server, or try again in a moment."}
+                </p>
+                {doc.failure_code && (
+                  <p className="mt-1.5 text-xs font-medium text-danger/80">
+                    Error code: {doc.failure_code}
+                  </p>
+                )}
                 <div className="mt-3">
                   <Button
                     variant="secondary"
