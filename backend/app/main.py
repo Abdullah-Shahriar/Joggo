@@ -4,13 +4,15 @@ import time
 from typing import MutableMapping
 from uuid import uuid4
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.config import get_settings
+from app.deps import verify_csrf
 from app.errors import ErrorCode, build_error_response, register_exception_handlers
 from app.logging import configure_logging, request_id_var
-from app.routers import health
+from app.ratelimit import register_rate_limiter
+from app.routers import audit, auth, health, me
 
 logger = logging.getLogger("app.http")
 
@@ -42,7 +44,6 @@ class RequestContextAndSecurityMiddleware:
         status_code = 500
         path: str = scope.get("path", "")
         method: str = scope.get("method", "")
-
         response_started = False
 
         async def send_with_headers(message: Message) -> None:
@@ -63,7 +64,6 @@ class RequestContextAndSecurityMiddleware:
                 if path.startswith("/api"):
                     set_header(b"cache-control", b"no-store")
 
-                # Preserve multi-value headers like Set-Cookie while updating single-value ones.
                 managed = {
                     b"x-request-id",
                     b"x-content-type-options",
@@ -123,10 +123,15 @@ def create_app() -> FastAPI:
         docs_url="/api/docs" if settings.ENV == "dev" else None,
         redoc_url=None,
         openapi_url="/api/openapi.json" if settings.ENV == "dev" else None,
+        dependencies=[Depends(verify_csrf)],
     )
 
     register_exception_handlers(application)
+    register_rate_limiter(application)
     application.include_router(health.router)
+    application.include_router(auth.router)
+    application.include_router(me.router)
+    application.include_router(audit.router)
     application.add_middleware(RequestContextAndSecurityMiddleware)
 
     return application

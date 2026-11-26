@@ -178,19 +178,18 @@ def test_seed_is_idempotent(db_session: Session) -> None:
 
 
 def test_audit_log_immutability_trigger_blocks_update_and_delete(db_session: Session) -> None:
-    row = AuditLog(
-        actor_id=None,
-        actor_role="system",
+    from app.services import audit
+
+    row = audit.record(
+        db_session,
         action="TEST_IMMUTABILITY",
+        outcome=AuditOutcome.allowed,
+        actor_role="system",
         resource_type="system",
         resource_id="m1",
-        outcome=AuditOutcome.allowed,
         ip="127.0.0.1",
-        metadata_={"check": True},
-        prev_hash="0" * 64,
-        hash="1" * 64,
+        metadata={"check": True},
     )
-    db_session.add(row)
     db_session.commit()
 
     with pytest.raises(DBAPIError) as upd_exc:

@@ -7,9 +7,9 @@ Read order each session: `brain.md` → `rules.md` → `architecture.md` → `de
 
 ## 1. Status (edit me)
 
-- Current milestone: **M1 (complete — starting M2)**
+- Current milestone: **M2 (complete — starting M3)**
 - Last updated: 2026-11-26
-- Last full test run: pass (8/8 backend pytest against fresh PostgreSQL)
+- Last full test run: pass (18/18 backend pytest against fresh PostgreSQL)
 - Blockers: none
 
 ## 2. Project summary
@@ -43,6 +43,7 @@ Read order each session: `brain.md` → `rules.md` → `architecture.md` → `de
 ## 4. Decisions log (AI developer appends here)
 
 - 2026-11-26 (M0): Placed frontend `APP_NAME` constant in `frontend/lib/constants.ts`; `docker-compose.yml` provides local dev `${VAR:-default}` fallbacks so `docker compose up --build` succeeds directly from a clean clone without manual `.env` creation. Backend Dockerfile starts uvicorn directly in M0 (Alembic + seed command added in M1).
+- 2026-11-26 (M2): Auth cookies set `Secure=True` when `ENV=prod` (`Secure=False` in local HTTP dev/test so localhost/TestClient works without TLS); `refresh_token` path strictly `/api/auth` per `architecture.md §6`. `GET /api/audit/verify` permits both `admin` and `auditor` (read-only) to align `architecture.md §7` and `design.md §5`.
 
 ## 5. Build order and checklist
 
@@ -60,9 +61,9 @@ Do the milestones in order. Each has a "Done when". Do not start the next until 
 - **Done when:** migration applies on an empty DB; seed is idempotent; trigger blocks UPDATE/DELETE on `audit_logs`.
 
 ### M2 — Auth, RBAC, audit
-- [ ] Signup, login, lockout, refresh rotation with reuse detection, logout, Google login, `/me`, sessions, password change
-- [ ] Dependencies: `current_user`, `require_active`, `require_role`, CSRF header + Origin check, rate limits, security headers
-- [ ] `audit.record` with hash chain and advisory lock; `/api/audit` + `/api/audit/verify`
+- [x] Signup, login, lockout, refresh rotation with reuse detection, logout, Google login, `/me`, sessions, password change
+- [x] Dependencies: `current_user`, `require_active`, `require_role`, CSRF header + Origin check, rate limits, security headers
+- [x] `audit.record` with hash chain and advisory lock; `/api/audit` + `/api/audit/verify`
 - **Done when:** all Auth and Authorization tests in architecture.md §24 pass (document-related ones come in later milestones).
 
 ### M3 — Vault and upload
@@ -152,3 +153,4 @@ Detection is rule + small-model based and not perfect → mandatory human review
 
 - 2026-11-26 — M0 — Added docs/ specs, root scaffold (.env.example, docker-compose.yml, README.md), FastAPI backend scaffold (/api/health, standard error handlers, request-id + S11 security middleware, PHI-safe JSON logging, M0 tests), and Next.js 14 frontend scaffold (Tailwind tokens, Inter font, /api rewrites).
 - 2026-11-26 — M1 — Added SQLAlchemy 2.0 models for all 9 tables, Alembic initial migration with audit_logs immutability trigger, idempotent scripts/seed.py, backend Dockerfile startup command, and M1 database tests (8/8 passed on fresh Postgres).
+- 2026-11-26 — M2 — Added auth (signup, login, lockout, refresh rotation + reuse detection, logout, Google ID token login, /me profile/password/sessions), RBAC dependencies, S7 CSRF enforcement, slowapi rate limiting, hash-chained audit service + /api/audit & /api/audit/verify, and M2 tests (18/18 passed).

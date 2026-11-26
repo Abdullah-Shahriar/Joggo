@@ -77,7 +77,8 @@ def test_standard_error_shape_across_status_codes(app: FastAPI, client: TestClie
     ]
 
     for method, path, payload, expected_status, expected_code in cases:
-        res = client.request(method, path, json=payload)
+        headers = {"X-Requested-With": "fetch", "Origin": "http://localhost:3000"} if method != "GET" else {}
+        res = client.request(method, path, json=payload, headers=headers)
         assert res.status_code == expected_status
         body = res.json()
         assert set(body.keys()) == {"error"}
