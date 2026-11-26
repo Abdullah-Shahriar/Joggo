@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 from fastapi import APIRouter, Depends, File, Form, Header, Query, Request, Response, UploadFile
 from PIL import Image
 import pymupdf
-from sqlalchemy import String, asc, cast, desc, func, or_, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -36,7 +36,6 @@ from app.schemas.document import (
     ApproveDocumentRequest,
     DocumentDetailResponse,
     DocumentEntityResponse,
-    DocumentListItem,
     DocumentListResponse,
     DocumentResultResponse,
     DocumentStepsResponse,

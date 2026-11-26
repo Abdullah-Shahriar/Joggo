@@ -2,30 +2,20 @@
 
 import React from "react";
 import Link from "next/link";
-import { NotepadTextDashed } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-export interface FooterLink {
+interface FooterLink {
   label: string;
   href: string;
 }
 
-export interface SocialLink {
-  icon: React.ReactNode;
-  href: string;
-  label: string;
-}
-
-export interface FooterProps {
+interface FooterProps {
   brandName?: string;
   brandHref?: string;
   brandDescription?: string;
   contactEmail?: string;
-  socialLinks?: SocialLink[];
   navLinks?: FooterLink[];
-  creatorName?: string;
-  creatorUrl?: string;
   rightNotice?: string;
   brandIcon?: React.ReactNode;
   brandIconContainerClassName?: string;
@@ -37,10 +27,7 @@ export const Footer = ({
   brandHref = "/",
   brandDescription = "Privacy-first AI for medical documents.",
   contactEmail,
-  socialLinks = [],
   navLinks = [],
-  creatorName,
-  creatorUrl,
   rightNotice,
   brandIcon,
   brandIconContainerClassName,
@@ -49,65 +36,43 @@ export const Footer = ({
   const currentYear = Math.max(2026, new Date().getFullYear());
 
   return (
-    <section className={cn("relative w-full mt-0 overflow-x-clip overflow-y-hidden", className)}>
-      <footer className="border-t border-border bg-background mt-12 sm:mt-16 relative">
-        <div className="max-w-7xl flex flex-col justify-between mx-auto min-h-[28rem] sm:min-h-[33rem] md:min-h-[38rem] relative px-4 pt-10 pb-8 sm:px-6">
-          <div className="flex flex-col mb-16 sm:mb-20 md:mb-0 w-full">
-            <div className="w-full flex flex-col items-center">
-              <div className="space-y-2 flex flex-col items-center flex-1">
+    <section className={cn("relative mt-0 w-full overflow-x-clip overflow-y-hidden", className)}>
+      <footer className="relative mt-12 border-t border-border bg-background sm:mt-16">
+        <div className="relative mx-auto flex min-h-[28rem] max-w-7xl flex-col justify-between px-4 pb-8 pt-10 sm:min-h-[33rem] sm:px-6 md:min-h-[38rem]">
+          <div className="mb-16 flex w-full flex-col sm:mb-20 md:mb-0">
+            <div className="flex w-full flex-col items-center">
+              <div className="flex flex-1 flex-col items-center space-y-2">
                 <Link
                   href={brandHref}
                   aria-label={`${brandName} home`}
                   className="flex items-center gap-2 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
-                  <span className="text-foreground text-3xl font-bold hover:text-accent transition-colors">
+                  <span className="text-3xl font-bold text-foreground transition-colors hover:text-accent">
                     {brandName}
                   </span>
                 </Link>
-                <p className="text-muted-foreground font-semibold text-center w-full max-w-sm px-2 sm:px-0">
+                <p className="w-full max-w-sm px-2 text-center font-semibold text-muted-foreground sm:px-0">
                   {brandDescription}
                 </p>
                 {contactEmail && (
                   <a
                     href={`mailto:${contactEmail}`}
-                    className="text-sm font-medium text-accent hover:underline break-all"
+                    className="break-all text-sm font-medium text-accent hover:underline"
                   >
                     {contactEmail}
                   </a>
                 )}
               </div>
 
-              {socialLinks.length > 0 && (
-                <div className="flex mb-8 mt-3 gap-4">
-                  {socialLinks.map((link, index) => (
-                    <Link
-                      key={index}
-                      href={link.href}
-                      className="text-muted-foreground hover:text-foreground transition-colors"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <div className="w-6 h-6 hover:scale-110 duration-300">
-                        {link.icon}
-                      </div>
-                      <span className="sr-only">{link.label}</span>
-                    </Link>
-                  ))}
-                </div>
-              )}
-
               {navLinks.length > 0 && (
                 <nav
                   aria-label="Footer navigation"
-                  className={cn(
-                    "flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm font-medium text-muted-foreground max-w-full px-2 sm:px-4",
-                    socialLinks.length === 0 && "mt-5"
-                  )}
+                  className="mt-5 flex max-w-full flex-wrap justify-center gap-x-5 gap-y-2 px-2 text-sm font-medium text-muted-foreground sm:px-4"
                 >
-                  {navLinks.map((link, index) => (
+                  {navLinks.map((link) => (
                     <Link
-                      key={index}
-                      className="hover:text-foreground duration-300 hover:font-semibold"
+                      key={link.href}
+                      className="duration-300 hover:font-semibold hover:text-foreground"
                       href={link.href}
                     >
                       {link.label}
@@ -118,36 +83,25 @@ export const Footer = ({
             </div>
           </div>
 
-          <div className="mt-24 sm:mt-24 md:mt-24 flex flex-col gap-2 md:gap-1 items-center justify-center md:flex-row md:items-center md:justify-between px-2 sm:px-4 md:px-0 relative z-20">
+          <div className="relative z-20 mt-24 flex flex-col items-center justify-center gap-2 px-2 sm:px-4 md:flex-row md:items-center md:justify-between md:gap-1 md:px-0">
             <p
               suppressHydrationWarning
-              className="text-sm sm:text-base text-muted-foreground text-center md:text-left"
+              className="text-center text-sm text-muted-foreground sm:text-base md:text-left"
             >
               © {currentYear} {brandName}. All rights reserved.
             </p>
-            {creatorName && creatorUrl ? (
-              <nav className="flex gap-4">
-                <Link
-                  href={creatorUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm sm:text-base text-muted-foreground hover:text-foreground transition-colors duration-300 hover:font-medium"
-                >
-                  Crafted by {creatorName}
-                </Link>
-              </nav>
-            ) : rightNotice ? (
-              <p className="text-xs sm:text-sm text-muted-foreground text-center md:text-right">
+            {rightNotice && (
+              <p className="text-center text-xs text-muted-foreground sm:text-sm md:text-right">
                 {rightNotice}
               </p>
-            ) : null}
+            )}
           </div>
         </div>
 
         {/* Large background watermark text */}
         <div
           aria-hidden="true"
-          className="bg-gradient-to-b from-foreground/20 via-foreground/10 to-transparent bg-clip-text text-transparent leading-none absolute left-1/2 -translate-x-1/2 bottom-44 sm:bottom-40 md:bottom-32 font-extrabold tracking-tighter pointer-events-none select-none text-center px-4 whitespace-nowrap"
+          className="pointer-events-none absolute bottom-44 left-1/2 -translate-x-1/2 select-none whitespace-nowrap bg-gradient-to-b from-foreground/20 via-foreground/10 to-transparent bg-clip-text px-4 text-center font-extrabold leading-none tracking-tighter text-transparent sm:bottom-40 md:bottom-32"
           style={{
             fontSize: "clamp(2.5rem, 11vw, 9.5rem)",
             maxWidth: "95vw",
@@ -160,31 +114,28 @@ export const Footer = ({
         <Link
           href={brandHref}
           aria-label={`Go to ${brandName} home`}
-          className="absolute hover:border-accent transition-colors duration-400 drop-shadow-[0_0px_20px_rgba(15,118,110,0.22)] bottom-28 sm:bottom-24 md:bottom-20 backdrop-blur-sm rounded-3xl bg-background/80 left-1/2 border-2 border-border flex items-center justify-center p-2.5 sm:p-3 -translate-x-1/2 z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="duration-400 absolute bottom-28 left-1/2 z-10 flex -translate-x-1/2 items-center justify-center rounded-3xl border-2 border-border bg-background/80 p-2.5 drop-shadow-[0_0px_20px_rgba(15,118,110,0.22)] backdrop-blur-sm transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:bottom-24 sm:p-3 md:bottom-20"
         >
           <div
             className={cn(
-              "w-12 sm:w-16 md:w-24 h-12 sm:h-16 md:h-24 rounded-2xl flex items-center justify-center shadow-lg",
-              brandIconContainerClassName ||
-                "bg-gradient-to-br from-foreground to-foreground/80"
+              "flex h-12 w-12 items-center justify-center rounded-2xl shadow-lg sm:h-16 sm:w-16 md:h-24 md:w-24",
+              brandIconContainerClassName || "bg-gradient-to-br from-bg to-accent-tint",
             )}
           >
-            {brandIcon || (
-              <NotepadTextDashed className="w-8 sm:w-10 md:w-14 h-8 sm:h-10 md:h-14 text-background drop-shadow-lg" />
-            )}
+            {brandIcon}
           </div>
         </Link>
 
         {/* Bottom horizontal hairline */}
         <div
           aria-hidden="true"
-          className="absolute bottom-32 sm:bottom-34 backdrop-blur-sm h-1 bg-gradient-to-r from-transparent via-border to-transparent w-full left-1/2 -translate-x-1/2"
+          className="sm:bottom-34 absolute bottom-32 left-1/2 h-1 w-full -translate-x-1/2 bg-gradient-to-r from-transparent via-border to-transparent backdrop-blur-sm"
         />
 
         {/* Bottom soft fade shadow */}
         <div
           aria-hidden="true"
-          className="bg-gradient-to-t from-background via-background/80 blur-[1em] to-background/40 absolute bottom-28 w-full h-24 pointer-events-none"
+          className="pointer-events-none absolute bottom-28 h-24 w-full bg-gradient-to-t from-background via-background/80 to-background/40 blur-[1em]"
         />
       </footer>
     </section>

@@ -4,10 +4,10 @@ import { useMemo, type CSSProperties } from "react";
 
 import { cn } from "@/lib/utils";
 
-export type LoaderHelixProps = {
+type LoaderHelixProps = {
   dots?: number;
   speed?: number;
-  variant?: "dna" | "ribbon" | "minimal";
+  variant?: "dna" | "minimal";
   className?: string;
 };
 
@@ -47,75 +47,48 @@ export function LoaderHelix({
     >
       <span className="sr-only">Loading</span>
 
-      {variant === "ribbon" ? (
-        <div className="relative h-full w-full flex flex-col justify-around items-center">
-          {dotPairs.map((pair) => {
-            const gradientOpacity = 0.35 + (pair.index / dots) * 0.65;
-            return (
-              <div
-                key={pair.index}
-                className="absolute rounded-full bg-accent will-change-transform"
+      <div className="relative flex h-full w-full flex-col justify-around">
+        {dotPairs.map((pair) => (
+          <div
+            key={pair.index}
+            className="relative flex w-full items-center justify-center"
+            style={{ height: dotSpacing }}
+          >
+            {variant === "dna" && (
+              <span
+                className="absolute h-[1.5px] bg-accent/35 will-change-transform"
                 style={{
-                  width: dotSize,
-                  height: dotSize,
-                  left: `calc(50% - ${dotSize / 2}px)`,
-                  top: pair.index * dotSpacing,
-                  animation: `helix-ribbon-gradient ${speed}s ease-in-out infinite`,
+                  width: maxDisplacement * 2,
+                  animation: `helix-rung-fade ${speed}s ease-in-out infinite`,
                   animationDelay: `${pair.delayA}s`,
-                  opacity: gradientOpacity,
                 }}
               />
-            );
-          })}
-        </div>
-      ) : (
-        <div className="relative h-full w-full flex flex-col justify-around">
-          {dotPairs.map((pair) => (
+            )}
+
             <div
-              key={pair.index}
-              className="relative w-full flex items-center justify-center"
-              style={{ height: dotSpacing }}
-            >
-              {variant === "dna" && (
-                <span
-                  className="absolute h-[1.5px] bg-accent/35 will-change-transform"
-                  style={{
-                    width: maxDisplacement * 2,
-                    animation: `helix-rung-fade ${speed}s ease-in-out infinite`,
-                    animationDelay: `${pair.delayA}s`,
-                  }}
-                />
-              )}
+              className="absolute rounded-full bg-accent will-change-transform"
+              style={{
+                width: dotSize,
+                height: dotSize,
+                left: `calc(50% - ${dotSize / 2}px)`,
+                animation: `helix-strand-a ${speed}s ease-in-out infinite`,
+                animationDelay: `${pair.delayA}s`,
+              }}
+            />
 
-              <div
-                className="absolute rounded-full bg-accent will-change-transform"
-                style={{
-                  width: dotSize,
-                  height: dotSize,
-                  left: `calc(50% - ${dotSize / 2}px)`,
-                  animation: `helix-strand-a ${speed}s ease-in-out infinite`,
-                  animationDelay: `${pair.delayA}s`,
-                }}
-              />
-
-              <div
-                className="absolute rounded-full bg-foreground will-change-transform"
-                style={{
-                  width: dotSize,
-                  height: dotSize,
-                  left: `calc(50% - ${dotSize / 2}px)`,
-                  animation: `helix-strand-a ${speed}s ease-in-out infinite`,
-                  animationDelay: `${pair.delayB}s`,
-                }}
-              />
-            </div>
-          ))}
-        </div>
-      )}
+            <div
+              className="absolute rounded-full bg-foreground will-change-transform"
+              style={{
+                width: dotSize,
+                height: dotSize,
+                left: `calc(50% - ${dotSize / 2}px)`,
+                animation: `helix-strand-a ${speed}s ease-in-out infinite`,
+                animationDelay: `${pair.delayB}s`,
+              }}
+            />
+          </div>
+        ))}
+      </div>
     </output>
   );
 }
-
-export type { LoaderHelixProps as LoaderHelixPropsType };
-
-export default LoaderHelix;

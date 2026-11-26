@@ -25,16 +25,6 @@
   }
 }
 
-@keyframes cs-cross-pulse {
-  0%,
-  100% {
-    opacity: 0.45;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
 @keyframes cs-row-flash {
   0% {
     background-color: #E6F4F1;
@@ -129,15 +119,6 @@
   }
 }
 
-.cs-brand-ring {
-  animation: cs-spin 1.2s linear infinite;
-  transform-origin: center;
-}
-
-.cs-brand-cross {
-  animation: cs-cross-pulse 1.2s ease-in-out infinite;
-}
-
 .cs-spinner {
   animation: cs-spin 0.8s linear infinite;
 }
@@ -215,29 +196,6 @@
   25%,
   75% {
     opacity: 0.38;
-  }
-}
-
-@keyframes helix-ribbon-gradient {
-  0% {
-    transform: translateX(0px) scale(0.65);
-    opacity: 0.25;
-  }
-  25% {
-    transform: translateX(var(--helix-disp, 18px)) scale(1.05);
-    opacity: 1;
-  }
-  50% {
-    transform: translateX(0px) scale(0.65);
-    opacity: 0.4;
-  }
-  75% {
-    transform: translateX(calc(var(--helix-disp, 18px) * -1)) scale(1.05);
-    opacity: 0.85;
-  }
-  100% {
-    transform: translateX(0px) scale(0.65);
-    opacity: 0.25;
   }
 }
 
