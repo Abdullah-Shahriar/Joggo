@@ -15,12 +15,12 @@ export function BrandLoader({
       aria-live="polite"
       className={
         fullScreen
-          ? "flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4"
+          ? "fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-bg px-4"
           : "flex flex-col items-center justify-center gap-4 py-12"
       }
     >
-      <LoaderHelix variant="dna" dots={12} speed={1.8} />
-      <p className="text-sm font-medium text-text-muted">{label}</p>
+      <LoaderHelix variant="dna" dots={12} speed={1.5} />
+      <p className="flex h-5 items-center text-sm font-medium text-text-muted">{label}</p>
     </div>
   );
 }
