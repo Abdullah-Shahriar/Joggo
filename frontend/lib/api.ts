@@ -57,6 +57,11 @@ const NO_REFRESH_PATHS = new Set([
   "/auth/logout",
 ]);
 
+export function clearSessionHintCookie(): void {
+  if (typeof document === "undefined") return;
+  document.cookie = "joggo_session=; Path=/; Max-Age=0; SameSite=Lax";
+}
+
 let refreshPromise: Promise<boolean> | null = null;
 
 async function attemptRefresh(): Promise<boolean> {
@@ -70,8 +75,12 @@ async function attemptRefresh(): Promise<boolean> {
           "X-Requested-With": "fetch",
         },
       });
+      if (!res.ok) {
+        clearSessionHintCookie();
+      }
       return res.ok;
     } catch {
+      clearSessionHintCookie();
       return false;
     } finally {
       refreshPromise = null;
@@ -151,6 +160,7 @@ async function rawFetch(path: string, options: ApiRequestOptions, isRetry = fals
     if (refreshed) {
       return rawFetch(path, options, true);
     }
+    clearSessionHintCookie();
     if (options.redirectOn401 !== false) {
       redirectToLogin();
     }

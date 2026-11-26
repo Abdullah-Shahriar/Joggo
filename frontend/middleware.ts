@@ -13,21 +13,24 @@ const PROTECTED_PREFIXES = ["/dashboard", "/documents", "/help", "/profile", "/a
 
 export function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
-  const hasSessionCookie =
-    Boolean(request.cookies.get("access_token")?.value) ||
-    Boolean(request.cookies.get("refresh_token")?.value);
+  const hasAccessToken = Boolean(request.cookies.get("access_token")?.value);
+  const hasSessionHint = request.cookies.get("joggo_session")?.value === "1";
 
-  if (hasSessionCookie && PUBLIC_ONLY_PATHS.has(pathname)) {
+  // Public-only routes: redirect away ONLY when access_token exists so a stale
+  // joggo_session hint cookie can never cause a /login <-> /dashboard loop.
+  if (hasAccessToken && PUBLIC_ONLY_PATHS.has(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     url.search = "";
     return NextResponse.redirect(url);
   }
 
+  // Protected routes: treat session as present if access_token OR joggo_session=1
+  // exists; AppLayout verifies with /api/me, which silently refreshes once on 401.
   const isProtected = PROTECTED_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
-  if (!hasSessionCookie && isProtected) {
+  if (!hasAccessToken && !hasSessionHint && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = `?next=${encodeURIComponent(pathname + search)}`;

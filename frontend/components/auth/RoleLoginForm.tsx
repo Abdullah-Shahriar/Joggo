@@ -25,6 +25,46 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
+function isPathAllowedForRole(role: UserRole, pathOnly: string): boolean {
+  if (pathOnly === "/profile" || pathOnly.startsWith("/profile/")) {
+    return true;
+  }
+  if (role === "doctor") {
+    return (
+      pathOnly === "/dashboard" ||
+      pathOnly === "/documents" ||
+      pathOnly.startsWith("/documents/") ||
+      pathOnly === "/help" ||
+      pathOnly.startsWith("/help/")
+    );
+  }
+  if (role === "admin") {
+    return pathOnly === "/admin" || pathOnly.startsWith("/admin/");
+  }
+  // auditor
+  return (
+    pathOnly === "/admin/audit" ||
+    pathOnly.startsWith("/admin/audit/") ||
+    pathOnly === "/help" ||
+    pathOnly.startsWith("/help/")
+  );
+}
+
+function resolvePostLoginDestination(role: UserRole, nextParam: string | null): string {
+  if (
+    nextParam &&
+    nextParam.startsWith("/") &&
+    !nextParam.startsWith("//") &&
+    !nextParam.startsWith("/\\")
+  ) {
+    const pathOnly = nextParam.split(/[?#]/, 1)[0];
+    if (isPathAllowedForRole(role, pathOnly)) {
+      return nextParam;
+    }
+  }
+  return getRoleHome(role);
+}
+
 function RoleLoginInner({
   portal,
   title,
@@ -56,31 +96,17 @@ function RoleLoginInner({
 
   const redirectAfterLogin = useCallback(
     (loggedInUser: AuthUser) => {
-      if (portal === "doctor") {
-        const nextParam = searchParams.get("next");
-        if (
-          nextParam &&
-          nextParam.startsWith("/") &&
-          !nextParam.startsWith("//") &&
-          !nextParam.startsWith("/admin") &&
-          !nextParam.startsWith("/00")
-        ) {
-          router.replace(nextParam);
-          return;
-        }
-        router.replace("/dashboard");
-        return;
-      }
-      router.replace(getRoleHome(loggedInUser.role));
+      const dest = resolvePostLoginDestination(loggedInUser.role, searchParams.get("next"));
+      router.replace(dest);
     },
-    [portal, router, searchParams],
+    [router, searchParams],
   );
 
   useEffect(() => {
     if (!isLoading && user) {
-      router.replace(getRoleHome(user.role));
+      redirectAfterLogin(user);
     }
-  }, [isLoading, user, router]);
+  }, [isLoading, user, redirectAfterLogin]);
 
   const onSubmit = async (values: LoginFormValues) => {
     setFormError(null);

@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tan
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useState, type ReactNode } from "react";
 
-import { apiRequest } from "./api";
+import { apiRequest, clearSessionHintCookie } from "./api";
 import type { AuthUser } from "./types";
 
 const PUBLIC_PATHS = new Set([
@@ -47,6 +47,7 @@ function AuthStateProvider({ children }: { children: ReactNode }) {
           silentErrorToast: true,
         });
       } catch {
+        clearSessionHintCookie();
         return null;
       }
     },
@@ -71,9 +72,7 @@ function AuthStateProvider({ children }: { children: ReactNode }) {
         silentErrorToast: true,
       });
     } finally {
-      if (typeof document !== "undefined") {
-        document.cookie = "joggo_session=; Path=/; Max-Age=0; SameSite=Lax";
-      }
+      clearSessionHintCookie();
       queryClient.clear();
       queryClient.setQueryData(["auth", "me"], null);
     }
