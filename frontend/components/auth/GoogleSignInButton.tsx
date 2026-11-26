@@ -41,6 +41,7 @@ export function GoogleSignInButton({
   const [clientId, setClientId] = useState<string>(buildTimeId);
   const [configChecked, setConfigChecked] = useState<boolean>(Boolean(buildTimeId));
   const [scriptLoaded, setScriptLoaded] = useState<boolean>(false);
+  const [scriptFailed, setScriptFailed] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const onSuccessRef = useRef(onSuccess);
   const onErrorRef = useRef(onError);
@@ -79,12 +80,26 @@ export function GoogleSignInButton({
     };
   }, [buildTimeId]);
 
-  // Detect if Google GSI script was already loaded from a prior route navigation
+  // Detect Google GSI availability even when the script was already loaded on a prior route
+  // or finishes asynchronously after clientId arrives from /api/auth/config.
   useEffect(() => {
+    if (!clientId || scriptLoaded) return;
     if (typeof window !== "undefined" && window.google?.accounts?.id) {
       setScriptLoaded(true);
+      return;
     }
-  }, [clientId]);
+    let checks = 0;
+    const timer = window.setInterval(() => {
+      checks += 1;
+      if (window.google?.accounts?.id) {
+        setScriptLoaded(true);
+        window.clearInterval(timer);
+      } else if (checks >= 40) {
+        window.clearInterval(timer);
+      }
+    }, 150);
+    return () => window.clearInterval(timer);
+  }, [clientId, scriptLoaded]);
 
   useEffect(() => {
     if (!clientId || !scriptLoaded || !containerRef.current) return;
@@ -143,12 +158,30 @@ export function GoogleSignInButton({
     );
   }
 
+  if (scriptFailed) {
+    return (
+      <button
+        type="button"
+        disabled
+        className="flex h-10 w-full items-center justify-center rounded border border-border bg-bg-subtle px-3 text-sm text-text-muted"
+      >
+        Google sign-in unavailable (blocked by browser or network)
+      </button>
+    );
+  }
+
   return (
     <>
       <Script
         src="https://accounts.google.com/gsi/client?hl=en"
         strategy="afterInteractive"
         onLoad={() => setScriptLoaded(true)}
+        onReady={() => {
+          if (typeof window !== "undefined" && window.google?.accounts?.id) {
+            setScriptLoaded(true);
+          }
+        }}
+        onError={() => setScriptFailed(true)}
       />
       <div ref={containerRef} className="flex min-h-[42px] w-full justify-center" />
     </>
