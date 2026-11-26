@@ -8,6 +8,7 @@ class ErrorBody(BaseModel):
     code: str
     message: str
     request_id: str
+    existing_document_id: str | None = None
 
 
 class ErrorResponse(BaseModel):

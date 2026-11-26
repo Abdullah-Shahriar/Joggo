@@ -85,12 +85,14 @@ class AppError(Exception):
         http_status: int,
         message: str,
         headers: Mapping[str, str] | None = None,
+        existing_document_id: str | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.http_status = http_status
         self.message = message
         self.headers = dict(headers) if headers else None
+        self.existing_document_id = existing_document_id
 
 
 def build_error_response(
@@ -98,6 +100,7 @@ def build_error_response(
     http_status: int,
     message: str,
     headers: Mapping[str, str] | None = None,
+    existing_document_id: str | None = None,
 ) -> JSONResponse:
     req_id = request_id_var.get()
     body = ErrorResponse(
@@ -105,13 +108,14 @@ def build_error_response(
             code=code.value,
             message=message,
             request_id=req_id,
+            existing_document_id=existing_document_id,
         )
     )
     response_headers = dict(headers) if headers else {}
     response_headers["X-Request-ID"] = req_id
     return JSONResponse(
         status_code=http_status,
-        content=body.model_dump(),
+        content=body.model_dump(exclude_none=True),
         headers=response_headers,
     )
 
@@ -123,7 +127,13 @@ def register_exception_handlers(app: FastAPI) -> None:
             "Handled application error",
             extra={"event": "app_error", "error_code": exc.code.value, "status_code": exc.http_status},
         )
-        return build_error_response(exc.code, exc.http_status, exc.message, exc.headers)
+        return build_error_response(
+            exc.code,
+            exc.http_status,
+            exc.message,
+            exc.headers,
+            existing_document_id=exc.existing_document_id,
+        )
 
     @app.exception_handler(RequestValidationError)
     def handle_validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:

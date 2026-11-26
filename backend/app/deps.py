@@ -10,9 +10,12 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_db
 from app.errors import AppError, ErrorCode
+from app.models.audit import AuditOutcome
+from app.models.document import Document
 from app.models.session import SessionRecord
 from app.models.user import User, UserRole, UserStatus
 from app.security import ACCESS_COOKIE_NAME, decode_access_token
+from app.services import audit
 
 STATE_CHANGING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
@@ -118,3 +121,63 @@ def require_role(*roles: UserRole) -> Callable[[User], User]:
         return user
 
     return _checker
+
+
+def require_doctor_for_documents(
+    request: Request,
+    auth: AuthContext = Depends(get_current_auth),
+    db: Session = Depends(get_db),
+) -> AuthContext:
+    """Rules.md S5: Admin/auditor calling any document endpoint gets 403 ADMIN_NO_DOCUMENT_ACCESS + audit."""
+    if auth.user.role in (UserRole.admin, UserRole.auditor):
+        audit.record(
+            db,
+            action="ADMIN_DOC_ACCESS_DENIED",
+            outcome=AuditOutcome.denied,
+            actor=auth.user,
+            resource_type="document",
+            ip=get_client_ip(request),
+            metadata={"path": request.url.path},
+        )
+        db.commit()
+        raise AppError(
+            ErrorCode.ADMIN_NO_DOCUMENT_ACCESS,
+            403,
+            "Administrators and auditors cannot access clinical documents.",
+        )
+    return auth
+
+
+def require_active_doctor_for_documents(
+    auth: AuthContext = Depends(require_doctor_for_documents),
+) -> AuthContext:
+    if auth.user.status != UserStatus.active:
+        raise AppError(
+            ErrorCode.ACCOUNT_RESTRICTED,
+            403,
+            "Your account is restricted. You can contact support from Help.",
+        )
+    return auth
+
+
+def get_owned_document(
+    document_id: uuid.UUID,
+    request: Request,
+    auth: AuthContext = Depends(require_doctor_for_documents),
+    db: Session = Depends(get_db),
+) -> Document:
+    """Rules.md S5: Non-owner (or missing) returns 404 + audit DOC_ACCESS_DENIED."""
+    doc = db.get(Document, document_id)
+    if doc is None or doc.owner_id != auth.user.id:
+        audit.record(
+            db,
+            action="DOC_ACCESS_DENIED",
+            outcome=AuditOutcome.denied,
+            actor=auth.user,
+            resource_type="document",
+            resource_id=str(document_id),
+            ip=get_client_ip(request),
+        )
+        db.commit()
+        raise AppError(ErrorCode.NOT_FOUND, 404, "Document not found.")
+    return doc

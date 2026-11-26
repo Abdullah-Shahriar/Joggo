@@ -147,11 +147,13 @@ def test_csrf_required_on_state_changing_requests(client: TestClient) -> None:
 
 
 def test_refresh_rotation_and_reuse_detection_revokes_family_and_wipes_vault(app: FastAPI) -> None:
+    from app.services.vault import vault
+
     wiped_families: list[uuid.UUID] = []
-    register_session_wipe_hook(lambda sid: wiped_families.append(sid))
 
     try:
         with TestClient(app, raise_server_exceptions=False) as c:
+            register_session_wipe_hook(lambda sid: wiped_families.append(sid))
             email = _new_email("refresh")
             signup_res = c.post(
                 "/api/auth/signup",
@@ -192,15 +194,17 @@ def test_refresh_rotation_and_reuse_detection_revokes_family_and_wipes_vault(app
                 assert audit_row is not None
                 assert audit_row.resource_id == str(wiped_families[0])
     finally:
-        register_session_wipe_hook(lambda _sid: None)
+        register_session_wipe_hook(vault.wipe_session)
 
 
 def test_logout_wipes_vault_and_revokes_session(app: FastAPI) -> None:
+    from app.services.vault import vault
+
     wiped_families: list[uuid.UUID] = []
-    register_session_wipe_hook(lambda sid: wiped_families.append(sid))
 
     try:
         with TestClient(app, raise_server_exceptions=False) as c:
+            register_session_wipe_hook(lambda sid: wiped_families.append(sid))
             email = _new_email("logout")
             res = c.post(
                 "/api/auth/signup",
@@ -221,7 +225,7 @@ def test_logout_wipes_vault_and_revokes_session(app: FastAPI) -> None:
             assert me_res.status_code == 401
             assert me_res.json()["error"]["code"] == "SESSION_REVOKED"
     finally:
-        register_session_wipe_hook(lambda _sid: None)
+        register_session_wipe_hook(vault.wipe_session)
 
 
 def test_google_login_valid_invalid_unverified(

@@ -4,8 +4,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
+from app.config import get_settings
 from app.main import create_app
 from app.ratelimit import reset_rate_limits
+from app.services.vault import vault
 
 CSRF_HEADERS: dict[str, str] = {
     "X-Requested-With": "fetch",
@@ -14,10 +16,12 @@ CSRF_HEADERS: dict[str, str] = {
 
 
 @pytest.fixture(autouse=True)
-def _reset_limiter() -> Iterator[None]:
+def _test_isolation(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    monkeypatch.setattr(get_settings(), "ENV", "test")
     reset_rate_limits()
     yield
     reset_rate_limits()
+    vault.clear_all_for_tests()
 
 
 @pytest.fixture()

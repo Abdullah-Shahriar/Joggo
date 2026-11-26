@@ -7,9 +7,9 @@ Read order each session: `brain.md` → `rules.md` → `architecture.md` → `de
 
 ## 1. Status (edit me)
 
-- Current milestone: **M2 (complete — starting M3)**
+- Current milestone: **M3 (complete — starting M4)**
 - Last updated: 2026-11-26
-- Last full test run: pass (18/18 backend pytest against fresh PostgreSQL)
+- Last full test run: pass (22/22 backend pytest against PostgreSQL)
 - Blockers: none
 
 ## 2. Project summary
@@ -44,6 +44,7 @@ Read order each session: `brain.md` → `rules.md` → `architecture.md` → `de
 
 - 2026-11-26 (M0): Placed frontend `APP_NAME` constant in `frontend/lib/constants.ts`; `docker-compose.yml` provides local dev `${VAR:-default}` fallbacks so `docker compose up --build` succeeds directly from a clean clone without manual `.env` creation. Backend Dockerfile starts uvicorn directly in M0 (Alembic + seed command added in M1).
 - 2026-11-26 (M2): Auth cookies set `Secure=True` when `ENV=prod` (`Secure=False` in local HTTP dev/test so localhost/TestClient works without TLS); `refresh_token` path strictly `/api/auth` per `architecture.md §6`. `GET /api/audit/verify` permits both `admin` and `auditor` (read-only) to align `architecture.md §7` and `design.md §5`.
+- 2026-11-26 (M3): Added `python-multipart==0.0.20` (required by FastAPI for `UploadFile`/`Form` multipart uploads) and recorded it in `architecture.md §2`.
 
 ## 5. Build order and checklist
 
@@ -67,9 +68,9 @@ Do the milestones in order. Each has a "Done when". Do not start the next until 
 - **Done when:** all Auth and Authorization tests in architecture.md §24 pass (document-related ones come in later milestones).
 
 ### M3 — Vault and upload
-- [ ] `vault.py` (encryption, LRU, sweeper, wipe triggers, startup routine)
-- [ ] `POST /api/documents` with all validations, duplicate handling, job submission
-- [ ] `extraction.py` (text, annotations, widgets, OCR pages, OCR images, metadata hints)
+- [x] `vault.py` (encryption, LRU, sweeper, wipe triggers, startup routine)
+- [x] `POST /api/documents` with all validations, duplicate handling, job submission
+- [x] `extraction.py` (text, annotations, widgets, OCR pages, OCR images, metadata hints)
 - **Done when:** sample PDFs (text, scanned, image header) extract correctly; bad files give the right error codes; vault wipes on logout and idle.
 
 ### M4 — Detection, tokenization, safety, review
@@ -154,3 +155,4 @@ Detection is rule + small-model based and not perfect → mandatory human review
 - 2026-11-26 — M0 — Added docs/ specs, root scaffold (.env.example, docker-compose.yml, README.md), FastAPI backend scaffold (/api/health, standard error handlers, request-id + S11 security middleware, PHI-safe JSON logging, M0 tests), and Next.js 14 frontend scaffold (Tailwind tokens, Inter font, /api rewrites).
 - 2026-11-26 — M1 — Added SQLAlchemy 2.0 models for all 9 tables, Alembic initial migration with audit_logs immutability trigger, idempotent scripts/seed.py, backend Dockerfile startup command, and M1 database tests (8/8 passed on fresh Postgres).
 - 2026-11-26 — M2 — Added auth (signup, login, lockout, refresh rotation + reuse detection, logout, Google ID token login, /me profile/password/sessions), RBAC dependencies, S7 CSRF enforcement, slowapi rate limiting, hash-chained audit service + /api/audit & /api/audit/verify, and M2 tests (18/18 passed).
+- 2026-11-26 — M3 — Added AES-256-GCM in-memory Vault (HKDF, LRU, 20-entry cap, sweeper, startup recovery), atomic state machine, ThreadPoolExecutor jobs, PyMuPDF + Tesseract PDF extraction (annotations, widgets, OCR pages/images, metadata hints), POST /api/documents with all validations and duplicate race handling, scripts/make_sample_pdfs.py, and M3 tests (22/22 passed).

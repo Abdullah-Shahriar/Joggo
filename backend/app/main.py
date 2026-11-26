@@ -1,3 +1,5 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 import logging
 import re
 import time
@@ -8,11 +10,14 @@ from fastapi import Depends, FastAPI
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.config import get_settings
-from app.deps import verify_csrf
+from app.db import SessionLocal
+from app.deps import register_session_wipe_hook, verify_csrf
 from app.errors import ErrorCode, build_error_response, register_exception_handlers
 from app.logging import configure_logging, request_id_var
 from app.ratelimit import register_rate_limiter
-from app.routers import audit, auth, health, me
+from app.routers import audit, auth, documents, health, me
+from app.services import jobs
+from app.services.vault import run_startup_recovery, vault
 
 logger = logging.getLogger("app.http")
 
@@ -114,6 +119,22 @@ class RequestContextAndSecurityMiddleware:
             request_id_var.reset(token)
 
 
+@asynccontextmanager
+async def _lifespan(_application: FastAPI) -> AsyncIterator[None]:
+    register_session_wipe_hook(vault.wipe_session)
+    if get_settings().ENV != "test":
+        try:
+            with SessionLocal() as db:
+                run_startup_recovery(db)
+        except Exception:
+            logger.warning("Startup recovery skipped", extra={"event": "startup_recovery_skipped"})
+    vault.start_sweeper()
+    try:
+        yield
+    finally:
+        vault.stop_sweeper()
+
+
 def create_app() -> FastAPI:
     configure_logging()
     settings = get_settings()
@@ -124,6 +145,7 @@ def create_app() -> FastAPI:
         redoc_url=None,
         openapi_url="/api/openapi.json" if settings.ENV == "dev" else None,
         dependencies=[Depends(verify_csrf)],
+        lifespan=_lifespan,
     )
 
     register_exception_handlers(application)
@@ -132,6 +154,7 @@ def create_app() -> FastAPI:
     application.include_router(auth.router)
     application.include_router(me.router)
     application.include_router(audit.router)
+    application.include_router(documents.router)
     application.add_middleware(RequestContextAndSecurityMiddleware)
 
     return application
