@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { LoaderHelix } from "@/components/ui/loader-helix";
 import { APP_NAME } from "@/lib/constants";
 
+const INITIAL_LOAD_MS = 900;
 const MIN_OVERLAY_MS = 750;
 const FADE_OUT_MS = 180;
 const MAX_OVERLAY_MS = 5000;
@@ -15,7 +16,8 @@ export function RouteProgressBar() {
   const pathname = usePathname();
   const fetching = useIsFetching();
 
-  const [visible, setVisible] = useState(false);
+  // Start visible=true so the DNA Helix splash animation appears immediately on first page load
+  const [visible, setVisible] = useState(true);
   const [fading, setFading] = useState(false);
 
   const prevPathRef = useRef<string>(pathname);
@@ -68,6 +70,13 @@ export function RouteProgressBar() {
       }, FADE_OUT_MS);
     }, MAX_OVERLAY_MS);
   }, [clearTimers]);
+
+  // 0. Play initial splash animation when the website first loads
+  useEffect(() => {
+    shownAtRef.current = Date.now();
+    scheduleHide(INITIAL_LOAD_MS);
+    return () => clearTimers();
+  }, [scheduleHide, clearTimers]);
 
   // 1. Intercept clicks on any internal navigation link so the DNA animation appears immediately
   useEffect(() => {
