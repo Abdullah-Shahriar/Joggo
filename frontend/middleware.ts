@@ -1,6 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_ONLY_PATHS = new Set(["/", "/about", "/faq", "/login", "/signup"]);
+const PUBLIC_ONLY_PATHS = new Set([
+  "/",
+  "/about",
+  "/faq",
+  "/login",
+  "/signup",
+  "/00admin/00admin",
+  "/00auditor",
+]);
 const PROTECTED_PREFIXES = ["/dashboard", "/documents", "/help", "/profile", "/admin"];
 
 export function middleware(request: NextRequest) {
@@ -36,6 +44,8 @@ export const config = {
     "/faq",
     "/login",
     "/signup",
+    "/00admin/00admin",
+    "/00auditor",
     "/dashboard/:path*",
     "/documents/:path*",
     "/help/:path*",

@@ -4,6 +4,7 @@ import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
 
 import { apiRequest } from "@/lib/api";
+import type { UserRole } from "@/lib/constants";
 import type { AuthSessionResponse, AuthUser } from "@/lib/types";
 
 declare global {
@@ -26,20 +27,64 @@ declare global {
 }
 
 export function GoogleSignInButton({
+  portal = "doctor",
+  mode = "signin",
   onSuccess,
   onError,
 }: {
+  portal?: UserRole;
+  mode?: "signin" | "signup";
   onSuccess: (user: AuthUser) => void;
   onError: (message: string) => void;
 }) {
-  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
+  const buildTimeId = (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "").trim();
+  const [clientId, setClientId] = useState<string>(buildTimeId);
+  const [configChecked, setConfigChecked] = useState<boolean>(Boolean(buildTimeId));
+  const [scriptLoaded, setScriptLoaded] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [scriptLoaded, setScriptLoaded] = useState(false);
+
+  // Fetch runtime Google Client ID from backend (/api/auth/config) if not baked at build time
+  useEffect(() => {
+    if (buildTimeId) {
+      setClientId(buildTimeId);
+      setConfigChecked(true);
+      return;
+    }
+    let active = true;
+    apiRequest<{ google_client_id: string | null }>("/auth/config", {
+      redirectOn401: false,
+      silentErrorToast: true,
+    })
+      .then((res) => {
+        if (!active) return;
+        if (res.google_client_id) {
+          setClientId(res.google_client_id);
+        }
+      })
+      .catch(() => {
+        // Ignore; button remains gracefully disabled
+      })
+      .finally(() => {
+        if (active) setConfigChecked(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [buildTimeId]);
+
+  // Detect if Google GSI script was already loaded from a prior route navigation
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.google?.accounts?.id) {
+      setScriptLoaded(true);
+    }
+  }, [clientId]);
 
   useEffect(() => {
     if (!clientId || !scriptLoaded || !containerRef.current) return;
     const gsi = window.google?.accounts?.id;
     if (!gsi) return;
+
+    const btnWidth = Math.max(240, Math.min(360, containerRef.current.offsetWidth || 340));
 
     gsi.initialize({
       client_id: clientId,
@@ -51,7 +96,7 @@ export function GoogleSignInButton({
         try {
           const data = await apiRequest<AuthSessionResponse>("/auth/google", {
             method: "POST",
-            body: { credential: resp.credential },
+            body: { credential: resp.credential, portal },
             silentErrorToast: true,
           });
           onSuccess(data.user);
@@ -64,19 +109,28 @@ export function GoogleSignInButton({
     gsi.renderButton(containerRef.current, {
       theme: "outline",
       size: "large",
-      width: 350,
-      text: "continue_with",
+      width: btnWidth,
+      text: mode === "signup" ? "signup_with" : "continue_with",
     });
-  }, [clientId, scriptLoaded, onSuccess, onError]);
+  }, [clientId, scriptLoaded, portal, mode, onSuccess, onError]);
+
+  if (!configChecked) {
+    return (
+      <div className="h-10 w-full animate-pulse rounded border border-border bg-bg-subtle" />
+    );
+  }
 
   if (!clientId) {
     return (
       <button
         type="button"
         disabled
-        className="flex h-10 w-full items-center justify-center rounded border border-border bg-bg-subtle text-sm text-text-muted"
+        title="Set GOOGLE_CLIENT_ID on Render or NEXT_PUBLIC_GOOGLE_CLIENT_ID on Vercel to activate Gmail sign-in"
+        className="flex h-10 w-full items-center justify-center rounded border border-border bg-bg-subtle px-3 text-sm text-text-muted"
       >
-        Continue with Google (unavailable in local demo)
+        {mode === "signup"
+          ? "Sign up with Google (set GOOGLE_CLIENT_ID to activate)"
+          : "Continue with Google (set GOOGLE_CLIENT_ID to activate)"}
       </button>
     );
   }
@@ -88,7 +142,7 @@ export function GoogleSignInButton({
         strategy="afterInteractive"
         onLoad={() => setScriptLoaded(true)}
       />
-      <div ref={containerRef} className="flex min-h-[40px] w-full justify-center" />
+      <div ref={containerRef} className="flex min-h-[42px] w-full justify-center" />
     </>
   );
 }

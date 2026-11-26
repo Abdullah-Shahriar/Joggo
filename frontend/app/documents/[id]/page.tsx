@@ -489,7 +489,7 @@ function DocumentReviewContent() {
     }
   };
 
-  const handleExport = async (fmt: "txt" | "docx") => {
+  const handleExport = async (fmt: "pdf" | "png" | "jpg" | "txt" | "docx") => {
     const { blob, filename } = await apiBlob(`/documents/${docId}/export?format=${fmt}`);
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1040,13 +1040,25 @@ function DocumentReviewContent() {
                 <Copy className="h-3.5 w-3.5" aria-hidden="true" />
                 Copy
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => handleExport("txt")}>
+              <Button variant="primary" size="sm" onClick={() => handleExport("pdf")}>
                 <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                Download .txt
+                PDF
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => handleExport("png")}>
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                PNG
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => handleExport("jpg")}>
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                JPG
               </Button>
               <Button variant="secondary" size="sm" onClick={() => handleExport("docx")}>
                 <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                Download .docx
+                DOCX
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => handleExport("txt")}>
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                TXT
               </Button>
             </div>
           )}

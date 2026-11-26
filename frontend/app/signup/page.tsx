@@ -161,6 +161,8 @@ export default function SignupPage() {
         </div>
 
         <GoogleSignInButton
+          portal="doctor"
+          mode="signup"
           onSuccess={(u) => {
             setUser(u);
             router.replace(getRoleHome(u.role));

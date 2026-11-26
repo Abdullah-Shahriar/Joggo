@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import get_db
 from app.deps import get_client_ip, trigger_session_wipe
 from app.errors import AppError, ErrorCode
@@ -15,6 +16,7 @@ from app.models.session import SessionRecord
 from app.models.user import User, UserRole, UserStatus
 from app.ratelimit import limiter
 from app.schemas.auth import (
+    AuthConfigResponse,
     AuthSessionResponse,
     AuthUserResponse,
     GoogleAuthRequest,
@@ -103,6 +105,40 @@ def _create_session_and_set_cookies(
     )
     set_auth_cookies(response, access_token=access_jwt, refresh_token=raw_refresh)
     return session_row
+
+
+@router.get("/config", response_model=AuthConfigResponse)
+def get_auth_config() -> AuthConfigResponse:
+    """Expose public non-secret auth configuration (e.g., Google OAuth client ID) at runtime."""
+    client_id = get_settings().GOOGLE_CLIENT_ID.strip()
+    return AuthConfigResponse(google_client_id=client_id or None)
+
+
+def _enforce_portal_access(
+    *,
+    db: Session,
+    user: User,
+    portal: str | None,
+    ip: str,
+) -> None:
+    """Block sign-in when an account role does not match the requested login portal."""
+    if portal is None:
+        return
+    if user.role.value != portal:
+        audit.record(
+            db,
+            action="AUTH_PORTAL_DENIED",
+            outcome=AuditOutcome.denied,
+            actor=user,
+            resource_type="auth_portal",
+            resource_id=portal,
+            ip=ip,
+            metadata={"portal": portal},
+        )
+        db.commit()
+        if portal == "doctor":
+            raise AppError(ErrorCode.FORBIDDEN, 403, "Invalid email or password.")
+        raise AppError(ErrorCode.FORBIDDEN, 403, "Access denied for this login portal.")
 
 
 @router.post("/signup", response_model=AuthSessionResponse, status_code=201)
@@ -238,6 +274,8 @@ def login(
         db.commit()
         raise AppError(ErrorCode.INVALID_CREDENTIALS, 401, "Invalid email or password.")
 
+    _enforce_portal_access(db=db, user=user, portal=payload.portal, ip=ip)
+
     user.failed_login_count = 0
     user.locked_until = None
     user.last_login_at = now
@@ -294,6 +332,8 @@ def google_login(
             423,
             f"Account temporarily locked. Try again in {mins_left} minute(s).",
         )
+
+    _enforce_portal_access(db=db, user=user, portal=payload.portal, ip=ip)
 
     user.failed_login_count = 0
     user.locked_until = None

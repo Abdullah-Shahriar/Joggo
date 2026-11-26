@@ -1,7 +1,11 @@
 from datetime import datetime
+from typing import Literal
 import uuid
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+PortalType = Literal["doctor", "admin", "auditor"]
 
 
 class SignupRequest(BaseModel):
@@ -15,10 +19,16 @@ class SignupRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=1, max_length=256)
+    portal: PortalType | None = None
 
 
 class GoogleAuthRequest(BaseModel):
     credential: str = Field(min_length=10, max_length=8192)
+    portal: PortalType | None = None
+
+
+class AuthConfigResponse(BaseModel):
+    google_client_id: str | None = None
 
 
 class AuthUserResponse(BaseModel):

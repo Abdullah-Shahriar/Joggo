@@ -53,7 +53,7 @@ from app.schemas.document import (
 )
 from app.services import audit, jobs
 from app.services.documents_query import query_user_documents
-from app.services.exporter import export_docx, export_txt
+from app.services.exporter import export_docx, export_jpg, export_pdf, export_png, export_txt
 from app.services.pipeline import apply_manual_mark, run_document_pipeline, run_llm_stage
 from app.services.rehydrate import rehydrate_text
 from app.services.state import transition
@@ -786,7 +786,7 @@ def get_document_result(
 @router.get("/{document_id}/export")
 def export_document_result(
     request: Request,
-    export_format: Literal["txt", "docx"] = Query(alias="format", default="txt"),
+    export_format: Literal["txt", "docx", "pdf", "png", "jpg"] = Query(alias="format", default="pdf"),
     doc: Document = Depends(get_owned_document),
     auth: AuthContext = Depends(require_doctor_for_documents),
     db: Session = Depends(get_db),
@@ -803,6 +803,18 @@ def export_document_result(
         content = export_docx(rehydrated.text)
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         filename = f"summary-{short_id}.docx"
+    elif export_format == "pdf":
+        content = export_pdf(rehydrated.text)
+        media_type = "application/pdf"
+        filename = f"summary-{short_id}.pdf"
+    elif export_format == "png":
+        content = export_png(rehydrated.text)
+        media_type = "image/png"
+        filename = f"summary-{short_id}.png"
+    elif export_format == "jpg":
+        content = export_jpg(rehydrated.text)
+        media_type = "image/jpeg"
+        filename = f"summary-{short_id}.jpg"
     else:
         content = export_txt(rehydrated.text)
         media_type = "text/plain; charset=utf-8"
