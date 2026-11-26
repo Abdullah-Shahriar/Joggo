@@ -679,6 +679,25 @@ def run_llm_stage(doc_id: uuid.UUID, llm_request_id: uuid.UUID) -> None:
                 completed_at=now,
             )
             if outcome.used_fallback:
+                failed_primary = [
+                    {
+                        "provider": item.provider,
+                        "model": item.model,
+                        "error_code": item.error_code,
+                    }
+                    for item in outcome.history
+                    if not item.succeeded
+                ]
+                logger.warning(
+                    "Primary LLM provider failed; draft completed via fallback provider",
+                    extra={
+                        "event": "llm_fallback_used",
+                        "document_id": str(doc_id),
+                        "provider": outcome.result.provider,
+                        "attempts": outcome.attempts_total,
+                        "error_code": failed_primary[0]["error_code"] if failed_primary else None,
+                    },
+                )
                 audit.record(
                     db,
                     action="DOC_LLM_FALLBACK",
@@ -687,7 +706,11 @@ def run_llm_stage(doc_id: uuid.UUID, llm_request_id: uuid.UUID) -> None:
                     actor_role="doctor",
                     resource_type="document",
                     resource_id=str(doc_id),
-                    metadata={"provider": outcome.result.provider, "attempts": outcome.attempts_total},
+                    metadata={
+                        "provider": outcome.result.provider,
+                        "attempts": outcome.attempts_total,
+                        "failed_providers": failed_primary,
+                    },
                 )
             audit.record(
                 db,

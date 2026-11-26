@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 
 import httpx
@@ -11,12 +12,49 @@ logger = logging.getLogger("app.llm.gemini")
 
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
+PREFERRED_GEMINI_MODELS: tuple[str, ...] = (
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash-lite",
+)
 
-def _resolve_model(explicit_model: str | None, configured_model: str, default_model: str) -> str:
+_MODEL_ID_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
+_GEMINI_VERSION_RE = re.compile(r"gemini-(\d+)(?:\.(\d+))?")
+_GEMINI_SKIP_SUBSTRINGS: tuple[str, ...] = (
+    "embedding",
+    "aqa",
+    "imagen",
+    "image",
+    "veo",
+    "tts",
+    "audio",
+    "robotics",
+    "computer-use",
+    "live",
+    "vision",
+    "learnlm",
+    "gemma",
+    "native",
+    "dialog",
+    "customtools",
+)
+
+
+def _resolve_model(
+    explicit_model: str | None,
+    configured_model: str,
+    default_model: str,
+    *,
+    require_prefix: str | None = None,
+) -> str:
     if explicit_model is not None:
-        return explicit_model.strip()
-    cleaned = (configured_model or "").strip()
-    if not cleaned or cleaned.startswith("<"):
+        cleaned_explicit = explicit_model.strip().strip("\"'").removeprefix("models/").strip()
+        return cleaned_explicit or default_model
+    cleaned = (configured_model or "").strip().strip("\"'").removeprefix("models/").strip()
+    if not cleaned or cleaned.startswith("<") or not _MODEL_ID_RE.match(cleaned):
+        return default_model
+    if require_prefix and not cleaned.lower().startswith(require_prefix.lower()):
         return default_model
     return cleaned
 
@@ -83,30 +121,49 @@ def _pick_best_gemini_model(models_payload: dict, exclude: set[str]) -> str | No
         if not model_id or model_id in exclude:
             continue
         low = model_id.lower()
-        if not low.startswith("gemini"):
+        if not low.startswith("gemini-"):
             continue
-        if any(skip in low for skip in ("embedding", "aqa", "imagen", "veo", "tts", "audio", "robotics", "computer-use")):
+        if any(skip in low for skip in _GEMINI_SKIP_SUBSTRINGS):
             continue
         candidates.append(model_id)
 
     if not candidates:
         return None
 
-    def _rank(mid: str) -> tuple[int, int, str]:
-        low = mid.lower()
-        is_flash = 0 if "flash" in low else 1
-        is_preview = 1 if any(tag in low for tag in ("exp", "preview", "thinking")) else 0
-        # Prefer newer version numbers by sorting descending on version string inside same tier
-        return (is_flash, is_preview, mid)
+    # Prefer known stable text-generation Gemini Flash models first
+    for preferred in PREFERRED_GEMINI_MODELS:
+        if preferred in candidates:
+            return preferred
 
-    # Prefer stable flash models (newest first), then preview flash, then other gemini text models
-    stable_flash = [c for c in candidates if "flash" in c.lower() and not any(t in c.lower() for t in ("exp", "preview", "lite"))]
-    if stable_flash:
-        return sorted(stable_flash, reverse=True)[0]
-    any_flash = [c for c in candidates if "flash" in c.lower()]
-    if any_flash:
-        return sorted(any_flash, reverse=True)[0]
-    return sorted(candidates, key=_rank)[0]
+    def _score(mid: str) -> tuple[int, int, int, int, int]:
+        low = mid.lower()
+        is_flash = 1 if "flash" in low else 0
+        is_stable = 0 if any(t in low for t in ("exp", "preview", "thinking", "latest")) else 1
+        is_not_lite = 0 if "lite" in low else 1
+        vm = _GEMINI_VERSION_RE.search(low)
+        major = int(vm.group(1)) if vm else 0
+        minor = int(vm.group(2) or 0) if vm else 0
+        return (is_flash, is_stable, major, minor, is_not_lite)
+
+    return max(candidates, key=_score)
+
+
+def _build_gemini_payload(system: str, user: str, model_id: str) -> dict:
+    gen_config: dict = {
+        "temperature": 0.2,
+        "maxOutputTokens": 4096,
+    }
+    # Gemini 2.5 Flash enables dynamic thinking by default, which can consume maxOutputTokens
+    # or extend latency on clinical drafts. Disable thinking budget on 2.5 Flash models per v1beta docs.
+    low_model = model_id.lower()
+    if "2.5" in low_model and "flash" in low_model:
+        gen_config["thinkingConfig"] = {"thinkingBudget": 0}
+
+    return {
+        "systemInstruction": {"parts": [{"text": system}]},
+        "contents": [{"role": "user", "parts": [{"text": user}]}],
+        "generationConfig": gen_config,
+    }
 
 
 class GeminiProvider(LLMProvider):
@@ -115,7 +172,12 @@ class GeminiProvider(LLMProvider):
     def __init__(self, *, api_key: str | None = None, model: str | None = None) -> None:
         settings = get_settings()
         self._api_key = (api_key if api_key is not None else settings.GEMINI_API_KEY).strip()
-        self._model = _resolve_model(model, settings.GEMINI_MODEL, DEFAULT_GEMINI_MODEL)
+        self._model = _resolve_model(
+            model,
+            settings.GEMINI_MODEL,
+            DEFAULT_GEMINI_MODEL,
+            require_prefix="gemini-",
+        )
 
     def _discover_fallback_model(
         self,
@@ -148,14 +210,6 @@ class GeminiProvider(LLMProvider):
                 retryable=False,
             )
 
-        payload = {
-            "systemInstruction": {"parts": [{"text": system}]},
-            "contents": [{"role": "user", "parts": [{"text": user}]}],
-            "generationConfig": {
-                "temperature": 0.2,
-                "maxOutputTokens": 4096,
-            },
-        }
         start = time.perf_counter()
         tried_models: set[str] = set()
         active_model = self._model
@@ -164,6 +218,7 @@ class GeminiProvider(LLMProvider):
             with httpx.Client(timeout=timeout or DEFAULT_LLM_TIMEOUT) as client:
                 while True:
                     tried_models.add(active_model)
+                    payload = _build_gemini_payload(system, user, active_model)
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/{active_model}:generateContent"
                     resp = client.post(
                         url,
@@ -245,8 +300,13 @@ class GeminiProvider(LLMProvider):
         try:
             data = resp.json()
             candidates = data.get("candidates") or []
-            parts = candidates[0]["content"]["parts"]
+            if not candidates:
+                raise ValueError("No candidates in Gemini response")
+            content = candidates[0].get("content") or {}
+            parts = content.get("parts") or []
             text = "".join(str(p.get("text", "")) for p in parts if not p.get("thought"))
+            if not text.strip():
+                raise ValueError("Empty non-thought text in Gemini response")
         except Exception as exc:
             raise LLMProviderError(
                 ErrorCode.LLM_MALFORMED_RESPONSE,

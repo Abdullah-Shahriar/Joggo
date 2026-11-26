@@ -872,10 +872,11 @@ function DocumentReviewContent() {
   const llmStepError = doc.steps.find((s) => s.step === "LLM_CALL")?.error_message || null;
   const vaultExpiredBeforeApproval =
     doc.vault_expired && ["BLOCKED", "REVIEW_REQUIRED", "APPROVED", "FAILED"].includes(doc.status);
+  const isAlreadyApproved = ["APPROVED", "SENDING", "COMPLETED", "LLM_FAILED"].includes(doc.status);
   const canApproveAndSend =
     safetyPass &&
     !vaultExpiredBeforeApproval &&
-    (doc.status === "REVIEW_REQUIRED" || doc.status === "APPROVED") &&
+    doc.status === "REVIEW_REQUIRED" &&
     Boolean(doc.sanitized_sha256 || sanitizedData?.sanitized_sha256);
   const canReviewCleaned = canApproveAndSend && identifiersReplaced && safetyPass;
   const canGenerate = canReviewCleaned && reviewedChecked;
@@ -1028,10 +1029,9 @@ function DocumentReviewContent() {
               <div className="flex items-center gap-2 font-medium">
                 <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
                 <span>
-                  Verdict: Safety check passed
                   {doc.safety_report.warnings?.includes("NO_ENTITIES_FOUND")
-                    ? " — no personal details were found automatically; please inspect the page before proceeding."
-                    : " — all personal details are hidden. Ready for the next step."}
+                    ? "Safety check passed — no personal details were found automatically. Names written inside sentences can still be missed. Read the cleaned text before approving."
+                    : "Safety check passed. Names written inside sentences can still be missed. Read the cleaned text before approving."}
                 </span>
               </div>
               {canApproveAndSend && (
@@ -1624,38 +1624,48 @@ function DocumentReviewContent() {
               Delete
             </Button>
 
-            <div className="lg:hidden">
-              <Button
-                className="whitespace-nowrap"
-                disabled={!canGenerate}
-                loading={approveAndSendMutation.isPending}
-                onClick={() => approveAndSendMutation.mutate()}
-              >
-                Approve and generate
-              </Button>
-            </div>
+            {!isAlreadyApproved && (
+              <div className="lg:hidden">
+                <Button
+                  className="whitespace-nowrap"
+                  disabled={!canGenerate}
+                  loading={approveAndSendMutation.isPending}
+                  onClick={() => approveAndSendMutation.mutate()}
+                >
+                  Approve and generate
+                </Button>
+              </div>
+            )}
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-4 lg:justify-end">
-            <SignOutChecklist
-              identifiersReplaced={identifiersReplaced}
-              safetyPassed={safetyPass}
-              reviewedChecked={reviewedChecked}
-              canReview={canReviewCleaned}
-              onReviewedChange={setReviewedChecked}
-            />
+          {isAlreadyApproved ? (
+            <p className="text-xs text-text-muted">
+              {doc.approved_at
+                ? `Approved by you on ${formatDateTime(doc.approved_at)}`
+                : "Approved by you"}
+            </p>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-4 lg:justify-end">
+              <SignOutChecklist
+                identifiersReplaced={identifiersReplaced}
+                safetyPassed={safetyPass}
+                reviewedChecked={reviewedChecked}
+                canReview={canReviewCleaned}
+                onReviewedChange={setReviewedChecked}
+              />
 
-            <div className="hidden lg:block">
-              <Button
-                className="whitespace-nowrap"
-                disabled={!canGenerate}
-                loading={approveAndSendMutation.isPending}
-                onClick={() => approveAndSendMutation.mutate()}
-              >
-                Approve and generate
-              </Button>
+              <div className="hidden lg:block">
+                <Button
+                  className="whitespace-nowrap"
+                  disabled={!canGenerate}
+                  loading={approveAndSendMutation.isPending}
+                  onClick={() => approveAndSendMutation.mutate()}
+                >
+                  Approve and generate
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 

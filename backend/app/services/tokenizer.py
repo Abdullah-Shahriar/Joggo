@@ -7,7 +7,7 @@ from typing import Any
 import regex
 
 from app.services.detection.base import Span, normalize_bangla_digits
-from app.services.detection.resolve import NAME_TYPES, extract_name_components
+from app.services.detection.resolve import NAME_TYPES, extract_name_components, normalize_person_name
 
 ADMISSION_ANCHOR_RE = regex.compile(
     r"(?i)(?:\b(?:Date\s+of\s+Admission|Admitted|Admission|DOA)\b|ভর্তির\s*তারিখ)"
@@ -60,6 +60,8 @@ def normalize_entity_value(entity_type: str, raw: str) -> str:
     if entity_type in {"ID", "MRN"}:
         alnum = re.sub(r"[^A-Za-z0-9]", "", cleaned).casefold()
         return alnum or cleaned.casefold()
+    if entity_type in NAME_TYPES:
+        return normalize_person_name(cleaned)
     stripped = cleaned.strip(".,;:!?\"'()[]{}।")
     return stripped.casefold()
 
@@ -87,6 +89,44 @@ def _full_years_between(dob: date, ref: date) -> int:
     return max(0, years)
 
 
+def _merge_adjacent_same_token(
+    text: str,
+    replacements: list[tuple[int, int, str]],
+    vault_entities: list[dict[str, Any]],
+    token_meta: dict[str, dict[str, Any]],
+) -> tuple[list[tuple[int, int, str]], list[dict[str, Any]]]:
+    """Merge adjacent spans carrying the exact same bracketed token separated only by horizontal spaces.
+
+    Prevents outputs like "Spouse: [PERSON_4] [PERSON_4]" -> "Spouse: [PERSON_4]".
+    """
+    if len(replacements) < 2:
+        return replacements, vault_entities
+
+    merged_repl: list[tuple[int, int, str]] = []
+    merged_vault: list[dict[str, Any]] = []
+
+    for repl, vent in zip(replacements, vault_entities):
+        start, end, tok = repl
+        if (
+            merged_repl
+            and tok.startswith("[")
+            and merged_repl[-1][2] == tok
+            and start >= merged_repl[-1][1]
+        ):
+            gap = text[merged_repl[-1][1] : start]
+            if "\n" not in gap and "\r" not in gap and gap.strip(" \t") == "":
+                prev_start, _prev_end, prev_tok = merged_repl[-1]
+                merged_repl[-1] = (prev_start, end, prev_tok)
+                merged_vault[-1] = {**merged_vault[-1], "end": end}
+                if tok in token_meta and token_meta[tok]["occurrences"] > 1:
+                    token_meta[tok]["occurrences"] -= 1
+                continue
+        merged_repl.append(repl)
+        merged_vault.append(vent)
+
+    return merged_repl, merged_vault
+
+
 def tokenize_text(text: str, resolved_spans: list[Span]) -> TokenizationResult:
     """Assign deterministic context-preserving tokens and render sanitized text (architecture.md §13)."""
     ordered = sorted(resolved_spans, key=lambda s: (s.start, s.end))
@@ -94,6 +134,7 @@ def tokenize_text(text: str, resolved_spans: list[Span]) -> TokenizationResult:
 
     counters: dict[str, int] = {}
     value_to_token: dict[tuple[str, str], str] = {}
+    name_norm_to_token: dict[str, str] = {}
     mapping: dict[str, str] = {}
     name_components_set: dict[str, None] = {}
 
@@ -208,12 +249,17 @@ def tokenize_text(text: str, resolved_spans: list[Span]) -> TokenizationResult:
                 token_meta[token]["occurrences"] += 1
             continue
 
-        # Standard named/structured entity types
-        key_source_val = span.parent_value if (span.source == "sweep" and span.parent_value) else raw_val
+        # Standard named/structured entity types — honor parent_value from sweep, metadata, or person reconciliation
+        key_source_val = span.parent_value if span.parent_value else raw_val
         norm = normalize_entity_value(etype, key_source_val)
         lookup_key = (etype, norm)
 
-        if lookup_key not in value_to_token:
+        # Invariant: within one document, the same normalized person name never maps to two different tokens
+        if etype in NAME_TYPES and norm in name_norm_to_token:
+            token = name_norm_to_token[norm]
+        elif lookup_key in value_to_token:
+            token = value_to_token[lookup_key]
+        else:
             counters[etype] = counters.get(etype, 0) + 1
             idx = counters[etype]
             if etype == "PATIENT":
@@ -221,12 +267,12 @@ def tokenize_text(text: str, resolved_spans: list[Span]) -> TokenizationResult:
             else:
                 token = f"[{etype}_{idx}]"
             value_to_token[lookup_key] = token
+            if etype in NAME_TYPES:
+                name_norm_to_token[norm] = token
             mapping[token] = key_source_val.strip()
-        else:
-            token = value_to_token[lookup_key]
 
         if etype in NAME_TYPES:
-            for comp in extract_name_components(raw_val):
+            for comp in extract_name_components(key_source_val):
                 name_components_set[comp] = None
 
         replacements.append((span.start, span.end, token))
@@ -252,6 +298,10 @@ def tokenize_text(text: str, resolved_spans: list[Span]) -> TokenizationResult:
             }
         else:
             token_meta[token]["occurrences"] += 1
+
+    replacements, vault_entities = _merge_adjacent_same_token(
+        text, replacements, vault_entities, token_meta
+    )
 
     # Single-pass right-to-left replacement by offsets
     out = text

@@ -11,8 +11,8 @@ from app.services.detection.base import (
     has_adjacent_medical_unit,
     normalize_bangla_digits,
 )
-from app.services.detection.dates import DATE_PATTERNS, detect_dates
-from app.services.detection.labels import detect_labels
+from app.services.detection.dates import detect_dates, iter_valid_date_matches
+from app.services.detection.labels import LABEL_KEYWORDS, detect_labels, is_label_keyword
 from app.services.detection.presidio_engine import detect_presidio
 from app.services.detection.regex_rules import (
     BD_MOBILE_RE,
@@ -99,7 +99,13 @@ def run_safety_scan(
         cleaned = real_val.strip()
         if len(cleaned) < 3:
             continue
-        if cleaned.lower() in COMMON_WORDS or cleaned.lower() in MEDICAL_TERMS or cleaned in BANGLA_STOPWORDS:
+        if (
+            cleaned.lower() in COMMON_WORDS
+            or cleaned.lower() in MEDICAL_TERMS
+            or cleaned.lower() in LABEL_KEYWORDS
+            or is_label_keyword(cleaned)
+            or cleaned in BANGLA_STOPWORDS
+        ):
             continue
         if any(ch.isdigit() for ch in cleaned):
             pat = regex.compile(regex.escape(normalize_bangla_digits(cleaned)), regex.IGNORECASE)
@@ -124,6 +130,8 @@ def run_safety_scan(
             len(comp) < 3
             or comp.lower() in COMMON_WORDS
             or comp.lower() in MEDICAL_TERMS
+            or comp.lower() in LABEL_KEYWORDS
+            or is_label_keyword(comp)
             or comp in BANGLA_STOPWORDS
         ):
             continue
@@ -183,9 +191,8 @@ def run_safety_scan(
         digits = "".join(ch for ch in m.group(0) if ch.isdigit())
         if len(digits) >= 10 and not has_adjacent_medical_unit(masked, m.end()):
             _add_finding(findings, seen, ftype="PHONE", reason="Residual phone pattern", start=m.start(), end=m.end())
-    for _rule_id, dpat in DATE_PATTERNS:
-        for m in dpat.finditer(masked_norm):
-            _add_finding(findings, seen, ftype="DATE", reason="Residual date pattern", start=m.start(), end=m.end())
+    for _rule_id, m, _parsed, _is_dob in iter_valid_date_matches(masked, date_order=date_order):
+        _add_finding(findings, seen, ftype="DATE", reason="Residual date pattern", start=m.start(), end=m.end())
 
     findings.sort(key=lambda f: (f["start"], f["end"]))
     status = "PASS" if len(findings) == 0 else "BLOCK"

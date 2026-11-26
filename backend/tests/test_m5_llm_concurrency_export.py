@@ -16,7 +16,13 @@ from app.models import AuditLog, Document, TaskType, User, UserRole, UserStatus
 from app.security import hash_password
 from app.services.llm.base import LLMProvider, LLMProviderError, LLMResult
 from app.services.llm.breaker import CircuitBreaker
-from app.services.llm.prompts import AI_DISCLAIMER
+from app.services.llm.prompts import (
+    AI_DISCLAIMER,
+    SYSTEM_PROMPT,
+    TASK_HEADINGS,
+    build_external_handoff_prompt,
+    build_user_prompt,
+)
 from app.services.llm.router import LLMRouterError, get_breaker, route_generate
 from app.services.rehydrate import rehydrate_text
 from app.services.vault import vault
@@ -433,3 +439,30 @@ def test_double_concurrent_send_calls_provider_once_and_llm_failed_retry_works(
         assert call_count["n"] == 2
     finally:
         c.__exit__(None, None, None)
+
+
+def test_prompts_include_per_heading_guidance_and_preserve_rules() -> None:
+    assert "Copy placeholders exactly as written" in SYSTEM_PROMPT
+    assert "Never guess or invent identities, dates or numbers" in SYSTEM_PROMPT
+    assert "Not documented" in SYSTEM_PROMPT
+
+    sample_sanitized = "[PATIENT_A] (Age 47) admitted on [DAY_0] with HbA1c 8.1 %, Creatinine 1.4 mg/dL, GCS 15."
+
+    for task in (TaskType.discharge_summary, TaskType.case_summary, TaskType.treatment_plan):
+        prompt = build_user_prompt(task, sample_sanitized, repair=False)
+        for heading in TASK_HEADINGS[task]:
+            assert f"## {heading}:" in prompt
+        assert "Not documented" in prompt
+        assert sample_sanitized in prompt
+
+        handoff = build_external_handoff_prompt(task, sample_sanitized)
+        for heading in TASK_HEADINGS[task]:
+            assert f"## {heading}:" in handoff
+        assert sample_sanitized in handoff
+
+    tp_prompt = build_user_prompt(TaskType.treatment_plan, sample_sanitized)
+    assert "working diagnosis" in tp_prompt.lower()
+    assert "vitals" in tp_prompt.lower() and "lab" in tp_prompt.lower()
+
+    repair_prompt = build_user_prompt(TaskType.treatment_plan, sample_sanitized, repair=True)
+    assert "Return only the required Markdown headings" in repair_prompt

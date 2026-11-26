@@ -10,8 +10,8 @@ from app.errors import ErrorCode
 from app.models.document import TaskType
 from app.services.llm.base import LLMProvider, LLMProviderError, LLMResult
 from app.services.llm.breaker import CircuitBreaker
-from app.services.llm.gemini import GeminiProvider
-from app.services.llm.groq import GroqProvider
+from app.services.llm.gemini import DEFAULT_GEMINI_MODEL, GeminiProvider, _resolve_model
+from app.services.llm.groq import DEFAULT_GROQ_MODEL, GroqProvider
 from app.services.llm.prompts import SYSTEM_PROMPT, build_user_prompt
 from app.services.llm.validate import validate_llm_output
 
@@ -65,6 +65,29 @@ class LLMRouterError(Exception):
         super().__init__(failure_code.value)
         self.failure_code = failure_code
         self.history = history
+
+
+def log_llm_startup_config() -> None:
+    """Emit a PHI-free, secret-free startup log summarizing configured LLM providers and models."""
+    settings = get_settings()
+    order = ",".join(settings.llm_providers) or "none"
+    gemini_model = _resolve_model(
+        None,
+        settings.GEMINI_MODEL,
+        DEFAULT_GEMINI_MODEL,
+        require_prefix="gemini-",
+    )
+    groq_model = _resolve_model(None, settings.GROQ_MODEL, DEFAULT_GROQ_MODEL)
+    gemini_key = "yes" if bool(settings.GEMINI_API_KEY.strip()) else "no"
+    groq_key = "yes" if bool(settings.GROQ_API_KEY.strip()) else "no"
+    logger.info(
+        (
+            f"LLM startup config: order=[{order}] "
+            f"gemini(model={gemini_model}, key present: {gemini_key}) "
+            f"groq(model={groq_model}, key present: {groq_key})"
+        ),
+        extra={"event": "llm_startup_config"},
+    )
 
 
 def build_default_providers() -> list[LLMProvider]:

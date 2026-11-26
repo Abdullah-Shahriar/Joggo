@@ -95,3 +95,50 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
+
+/** Parse a raw User-Agent string into a friendly label like "Edge on Windows" or "Safari on iPhone". */
+export function formatUserAgent(ua: string | null | undefined): string {
+  if (!ua || !ua.trim()) return "Unknown browser";
+  const s = ua.trim();
+
+  let browser: string | null = null;
+  if (/Claude/i.test(s)) {
+    browser = "Claude desktop app";
+  } else if (/Edg(?:A|iOS)?\/|Edge\//i.test(s)) {
+    browser = "Edge";
+  } else if (/OPR\/|Opera/i.test(s)) {
+    browser = "Opera";
+  } else if (/SamsungBrowser\//i.test(s)) {
+    browser = "Samsung Internet";
+  } else if (/Firefox\/|FxiOS\//i.test(s)) {
+    browser = "Firefox";
+  } else if (/Brave/i.test(s)) {
+    browser = "Brave";
+  } else if (/CriOS\/|Chrome\//i.test(s)) {
+    browser = "Chrome";
+  } else if (/Safari\//i.test(s) && !/Android/i.test(s)) {
+    browser = "Safari";
+  }
+
+  let os: string | null = null;
+  if (/iPhone/i.test(s)) {
+    os = "iPhone";
+  } else if (/iPad/i.test(s)) {
+    os = "iPad";
+  } else if (/Android/i.test(s)) {
+    os = "Android";
+  } else if (/Windows/i.test(s)) {
+    os = "Windows";
+  } else if (/Macintosh|Mac OS X/i.test(s)) {
+    os = "macOS";
+  } else if (/CrOS/i.test(s)) {
+    os = "ChromeOS";
+  } else if (/Linux/i.test(s)) {
+    os = "Linux";
+  }
+
+  if (browser && os) return `${browser} on ${os}`;
+  if (browser) return browser;
+  if (os) return `Unknown browser on ${os}`;
+  return "Unknown browser";
+}

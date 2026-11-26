@@ -3,8 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpDown, ClipboardList, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/Button";
@@ -19,34 +19,141 @@ import type { DocumentListResponse } from "@/lib/types";
 
 type SortKey = "created_at" | "original_filename" | "status" | "entity_count";
 
+const VALID_SORTS: ReadonlySet<SortKey> = new Set([
+  "created_at",
+  "original_filename",
+  "status",
+  "entity_count",
+]);
+
+const VALID_STATUSES: ReadonlySet<string> = new Set([
+  "UPLOADED",
+  "PROCESSING",
+  "BLOCKED",
+  "REVIEW_REQUIRED",
+  "APPROVED",
+  "SENDING",
+  "COMPLETED",
+  "LLM_FAILED",
+  "FAILED",
+]);
+
+const VALID_TASKS: ReadonlySet<string> = new Set([
+  "discharge_summary",
+  "case_summary",
+  "treatment_plan",
+]);
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+interface FilterState {
+  q: string;
+  status: string;
+  taskType: string;
+  dateFrom: string;
+  dateTo: string;
+  sort: SortKey;
+  order: "asc" | "desc";
+  page: number;
+}
+
+function parseFiltersFromSearchParams(sp: URLSearchParams): FilterState {
+  const rawQ = sp.get("q") || "";
+  const rawStatus = sp.get("status") || "";
+  const rawTask = sp.get("task_type") || "";
+  const rawFrom = sp.get("date_from") || "";
+  const rawTo = sp.get("date_to") || "";
+  const rawSort = sp.get("sort") || "created_at";
+  const rawOrder = sp.get("order") || "desc";
+  const rawPage = Number.parseInt(sp.get("page") || "1", 10);
+
+  return {
+    q: rawQ,
+    status: VALID_STATUSES.has(rawStatus) ? rawStatus : "",
+    taskType: VALID_TASKS.has(rawTask) ? rawTask : "",
+    dateFrom: DATE_RE.test(rawFrom) ? rawFrom : "",
+    dateTo: DATE_RE.test(rawTo) ? rawTo : "",
+    sort: VALID_SORTS.has(rawSort as SortKey) ? (rawSort as SortKey) : "created_at",
+    order: rawOrder === "asc" ? "asc" : "desc",
+    page: Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1,
+  };
+}
+
+function buildUrlQuery(next: FilterState): string {
+  const out = new URLSearchParams();
+  if (next.q.trim()) out.set("q", next.q.trim());
+  if (next.status) out.set("status", next.status);
+  if (next.taskType) out.set("task_type", next.taskType);
+  if (next.dateFrom) out.set("date_from", next.dateFrom);
+  if (next.dateTo) out.set("date_to", next.dateTo);
+  if (next.sort !== "created_at") out.set("sort", next.sort);
+  if (next.order !== "desc") out.set("order", next.order);
+  if (next.page > 1) out.set("page", String(next.page));
+  return out.toString();
+}
+
 function DocumentsListContent() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
 
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState("");
-  const [taskType, setTaskType] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [sort, setSort] = useState<SortKey>("created_at");
-  const [order, setOrder] = useState<"asc" | "desc">("desc");
-  const [page, setPage] = useState(1);
+  const filters = parseFiltersFromSearchParams(searchParams);
+  const { q, status, taskType, dateFrom, dateTo, sort, order, page } = filters;
+
+  const [searchInput, setSearchInput] = useState(q);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
-  const params = new URLSearchParams();
-  if (q.trim()) params.set("q", q.trim());
-  if (status) params.set("status", status);
-  if (taskType) params.set("task_type", taskType);
-  if (dateFrom) params.set("date_from", `${dateFrom}T00:00:00Z`);
-  if (dateTo) params.set("date_to", `${dateTo}T23:59:59Z`);
-  params.set("sort", sort);
-  params.set("order", order);
-  params.set("page", String(page));
-  params.set("page_size", "10");
+  // Restore search box value on initial load and browser back/forward navigation
+  useEffect(() => {
+    setSearchInput(q);
+  }, [q]);
+
+  const replaceFilters = useCallback(
+    (patch: Partial<FilterState>) => {
+      const next: FilterState = { ...filters, ...patch };
+      const qs = buildUrlQuery(next);
+      const currentQs = searchParams.toString();
+      if (qs === currentQs) return;
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [filters, pathname, router, searchParams],
+  );
+
+  const hasActiveFilters = Boolean(q.trim() || status || taskType || dateFrom || dateTo);
+
+  const clearFilters = useCallback(() => {
+    setSearchInput("");
+    const cleared: FilterState = {
+      q: "",
+      status: "",
+      taskType: "",
+      dateFrom: "",
+      dateTo: "",
+      sort: "created_at",
+      order: "desc",
+      page: 1,
+    };
+    const qs = buildUrlQuery(cleared);
+    if (qs !== searchParams.toString()) {
+      router.replace(pathname, { scroll: false });
+    }
+  }, [pathname, router, searchParams]);
+
+  const apiParams = new URLSearchParams();
+  if (q.trim()) apiParams.set("q", q.trim());
+  if (status) apiParams.set("status", status);
+  if (taskType) apiParams.set("task_type", taskType);
+  if (dateFrom) apiParams.set("date_from", `${dateFrom}T00:00:00Z`);
+  if (dateTo) apiParams.set("date_to", `${dateTo}T23:59:59Z`);
+  apiParams.set("sort", sort);
+  apiParams.set("order", order);
+  apiParams.set("page", String(page));
+  apiParams.set("page_size", "10");
 
   const { data, isLoading, isError, refetch } = useQuery<DocumentListResponse>({
-    queryKey: ["documents", params.toString()],
-    queryFn: () => apiRequest<DocumentListResponse>(`/documents?${params.toString()}`),
+    queryKey: ["documents", apiParams.toString()],
+    queryFn: () => apiRequest<DocumentListResponse>(`/documents?${apiParams.toString()}`),
   });
 
   const deleteMutation = useMutation({
@@ -64,12 +171,10 @@ function DocumentsListContent() {
 
   const toggleSort = (col: SortKey) => {
     if (sort === col) {
-      setOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+      replaceFilters({ order: order === "asc" ? "desc" : "asc", page: 1 });
     } else {
-      setSort(col);
-      setOrder("desc");
+      replaceFilters({ sort: col, order: "desc", page: 1 });
     }
-    setPage(1);
   };
 
   return (
@@ -88,76 +193,77 @@ function DocumentsListContent() {
       </div>
 
       {/* Filters bar */}
-      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <input
-          type="search"
-          aria-label="Search documents"
-          placeholder="Search filename or ID"
-          value={q}
-          onChange={(e) => {
-            setQ(e.target.value);
-            setPage(1);
-          }}
-          className="h-10 rounded border border-border bg-bg px-3 text-sm text-text placeholder:text-text-muted"
-        />
+      <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <input
+            type="search"
+            aria-label="Search documents"
+            placeholder="Search filename or ID"
+            value={searchInput}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSearchInput(val);
+              replaceFilters({ q: val, page: 1 });
+            }}
+            className="h-10 rounded border border-border bg-bg px-3 text-sm text-text placeholder:text-text-muted"
+          />
 
-        <select
-          aria-label="Filter by status"
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            setPage(1);
-          }}
-          className="h-10 rounded border border-border bg-bg px-3 text-sm text-text"
+          <select
+            aria-label="Filter by status"
+            value={status}
+            onChange={(e) => replaceFilters({ status: e.target.value, page: 1 })}
+            className="h-10 rounded border border-border bg-bg px-3 text-sm text-text"
+          >
+            <option value="">All statuses</option>
+            <option value="UPLOADED">Uploaded</option>
+            <option value="PROCESSING">Processing</option>
+            <option value="BLOCKED">Blocked</option>
+            <option value="REVIEW_REQUIRED">Review required</option>
+            <option value="APPROVED">Approved</option>
+            <option value="SENDING">Generating</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="LLM_FAILED">Generation failed</option>
+            <option value="FAILED">Failed</option>
+          </select>
+
+          <select
+            aria-label="Filter by task"
+            value={taskType}
+            onChange={(e) => replaceFilters({ taskType: e.target.value, page: 1 })}
+            className="h-10 rounded border border-border bg-bg px-3 text-sm text-text"
+          >
+            <option value="">All tasks</option>
+            <option value="discharge_summary">Discharge summary</option>
+            <option value="case_summary">Case summary</option>
+            <option value="treatment_plan">Treatment plan</option>
+          </select>
+
+          <input
+            type="date"
+            aria-label="From date"
+            value={dateFrom}
+            onChange={(e) => replaceFilters({ dateFrom: e.target.value, page: 1 })}
+            className="h-10 rounded border border-border bg-bg px-3 text-sm text-text"
+          />
+
+          <input
+            type="date"
+            aria-label="To date"
+            value={dateTo}
+            onChange={(e) => replaceFilters({ dateTo: e.target.value, page: 1 })}
+            className="h-10 rounded border border-border bg-bg px-3 text-sm text-text"
+          />
+        </div>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={!hasActiveFilters}
+          onClick={clearFilters}
+          className="self-start whitespace-nowrap lg:self-auto"
         >
-          <option value="">All statuses</option>
-          <option value="UPLOADED">Uploaded</option>
-          <option value="PROCESSING">Processing</option>
-          <option value="BLOCKED">Blocked</option>
-          <option value="REVIEW_REQUIRED">Review required</option>
-          <option value="APPROVED">Approved</option>
-          <option value="SENDING">Generating</option>
-          <option value="COMPLETED">Completed</option>
-          <option value="LLM_FAILED">Generation failed</option>
-          <option value="FAILED">Failed</option>
-        </select>
-
-        <select
-          aria-label="Filter by task"
-          value={taskType}
-          onChange={(e) => {
-            setTaskType(e.target.value);
-            setPage(1);
-          }}
-          className="h-10 rounded border border-border bg-bg px-3 text-sm text-text"
-        >
-          <option value="">All tasks</option>
-          <option value="discharge_summary">Discharge summary</option>
-          <option value="case_summary">Case summary</option>
-          <option value="treatment_plan">Treatment plan</option>
-        </select>
-
-        <input
-          type="date"
-          aria-label="From date"
-          value={dateFrom}
-          onChange={(e) => {
-            setDateFrom(e.target.value);
-            setPage(1);
-          }}
-          className="h-10 rounded border border-border bg-bg px-3 text-sm text-text"
-        />
-
-        <input
-          type="date"
-          aria-label="To date"
-          value={dateTo}
-          onChange={(e) => {
-            setDateTo(e.target.value);
-            setPage(1);
-          }}
-          className="h-10 rounded border border-border bg-bg px-3 text-sm text-text"
-        />
+          Clear filters
+        </Button>
       </div>
 
       <div className="mt-6">
@@ -175,6 +281,8 @@ function DocumentsListContent() {
             message="No documents match your filters."
             actionLabel="Upload a document or photo"
             actionHref="/documents/new"
+            secondaryActionLabel={hasActiveFilters ? "Clear filters" : undefined}
+            onSecondaryAction={hasActiveFilters ? clearFilters : undefined}
           />
         ) : (
           <>
@@ -271,7 +379,7 @@ function DocumentsListContent() {
               page={data.page}
               pageSize={data.page_size}
               total={data.total}
-              onPageChange={setPage}
+              onPageChange={(nextPage) => replaceFilters({ page: nextPage })}
             />
           </>
         )}
@@ -294,7 +402,9 @@ function DocumentsListContent() {
 export default function DocumentsListPage() {
   return (
     <AppLayout allowedRoles={["doctor"]}>
-      <DocumentsListContent />
+      <Suspense fallback={<TableSkeleton rows={6} />}>
+        <DocumentsListContent />
+      </Suspense>
     </AppLayout>
   );
 }

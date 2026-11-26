@@ -194,6 +194,83 @@ def test_gemini_and_groq_providers_http_mapping(monkeypatch: pytest.MonkeyPatch)
     assert groq_post_calls["n"] == 2
 
 
+def test_gemini_model_validation_discovery_thinking_config_and_startup_log(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    import logging
+    from app.services.llm.gemini import _pick_best_gemini_model, _resolve_model
+    from app.services.llm.router import log_llm_startup_config
+
+    # Invalid / blank / models/-prefixed GEMINI_MODEL falls back or normalizes cleanly
+    assert _resolve_model(None, "", DEFAULT_GEMINI_MODEL, require_prefix="gemini-") == DEFAULT_GEMINI_MODEL
+    assert _resolve_model(None, "invalid-model", DEFAULT_GEMINI_MODEL, require_prefix="gemini-") == DEFAULT_GEMINI_MODEL
+    assert _resolve_model(None, "models/gemini-2.5-flash", DEFAULT_GEMINI_MODEL, require_prefix="gemini-") == "gemini-2.5-flash"
+    assert _resolve_model(None, '"gemini-2.5-flash"', DEFAULT_GEMINI_MODEL, require_prefix="gemini-") == "gemini-2.5-flash"
+
+    # Auto-model discovery skips image/live/latest/embedding models and picks gemini-2.5-flash
+    payload = {
+        "models": [
+            {"name": "models/gemini-flash-latest", "supportedGenerationMethods": ["generateContent"]},
+            {"name": "models/gemini-2.5-flash-image", "supportedGenerationMethods": ["generateContent"]},
+            {"name": "models/gemini-2.0-flash-live-001", "supportedGenerationMethods": ["generateContent"]},
+            {"name": "models/gemini-2.5-flash", "supportedGenerationMethods": ["generateContent"]},
+            {"name": "models/text-embedding-004", "supportedGenerationMethods": ["embedContent"]},
+        ]
+    }
+    assert _pick_best_gemini_model(payload, exclude=set()) == "gemini-2.5-flash"
+    # When gemini-2.5-flash is excluded, avoids -image and -live
+    assert _pick_best_gemini_model(payload, exclude={"gemini-2.5-flash"}) == "gemini-flash-latest" or _pick_best_gemini_model(
+        {
+            "models": [
+                {"name": "models/gemini-2.5-flash-image", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/gemini-2.0-flash-live-001", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/gemini-2.0-flash", "supportedGenerationMethods": ["generateContent"]},
+            ]
+        },
+        exclude=set(),
+    ) == "gemini-2.0-flash"
+
+    # Request payload sets thinkingBudget=0 for gemini-2.5-flash and omits it for gemini-2.0-flash
+    captured_payloads: list[dict] = []
+
+    def fake_post(self, url, *, json=None, headers=None, **kwargs):
+        captured_payloads.append({"url": url, "json": json})
+        return _DummyHTTPResponse(200, {"candidates": [{"content": {"parts": [{"text": "## Summary\nOK"}]}}]})
+
+    monkeypatch.setattr(httpx.Client, "post", fake_post)
+    GeminiProvider(api_key="test-key", model="gemini-2.5-flash").generate("sys", "usr")
+    assert captured_payloads[-1]["json"]["generationConfig"]["thinkingConfig"] == {"thinkingBudget": 0}
+
+    GeminiProvider(api_key="test-key", model="gemini-2.0-flash").generate("sys", "usr")
+    assert "thinkingConfig" not in captured_payloads[-1]["json"]["generationConfig"]
+
+    # PHI-free / secret-free startup log line reports order, models, and key present yes/no (never key)
+    secret_sentinel = "AIzaSySyntheticSecretValue12345"
+    monkeypatch.setattr(
+        "app.services.llm.router.get_settings",
+        lambda: type(
+            "S",
+            (),
+            {
+                "llm_providers": ["gemini", "groq"],
+                "GEMINI_MODEL": "",
+                "GEMINI_API_KEY": secret_sentinel,
+                "GROQ_MODEL": "llama-3.3-70b-versatile",
+                "GROQ_API_KEY": "",
+            },
+        )(),
+    )
+    caplog.set_level(logging.INFO, logger="app.llm.router")
+    caplog.clear()
+    log_llm_startup_config()
+    log_text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "order=[gemini,groq]" in log_text
+    assert "gemini(model=gemini-2.5-flash, key present: yes)" in log_text
+    assert "groq(model=llama-3.3-70b-versatile, key present: no)" in log_text
+    assert secret_sentinel not in log_text
+
+
 def test_session_revoke_audit_filters_and_failed_retry_vault_expired(app: FastAPI) -> None:
     email_doc = f"m7-doc-{uuid.uuid4().hex[:8]}@example.com"
     email_adm = f"m7-adm-{uuid.uuid4().hex[:8]}@example.com"

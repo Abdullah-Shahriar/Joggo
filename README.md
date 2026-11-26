@@ -303,10 +303,10 @@ See [`.env.example`](.env.example). Never commit `.env` or real secrets.
 
 ## Testing & Verification
 
-Backend tests run against PostgreSQL (never SQLite) with mocked LLM providers (**44/44 tests passing, 90% backend coverage**):
+Backend tests run against PostgreSQL (never SQLite) with mocked LLM providers (**51/51 tests passing**):
 
 ```bash
-# Run full backend test suite (44/44 tests)
+# Run full backend test suite (51/51 tests)
 docker compose exec backend pytest -v
 
 # Backend coverage report (90% total coverage)
@@ -328,7 +328,8 @@ docker compose exec backend python scripts/smoke_llm.py
 ## Known Limitations
 
 - Automated identifier detection combines rules and lightweight NLP and is never 100% infallible; mandatory clinician review and a second-pass safety scan are strictly enforced before any LLM request.
-- Unlabelled Bangla names in free text may need manual marking.
+- Unlabelled names in free text may still need manual marking (English and Bangla).
+- Documents processed before a detection upgrade retain their previously stored cleaned text; re-upload files to apply newer detection rules.
 - Python cannot guarantee deterministic zeroing of freed RAM pages; the AES-256-GCM in-memory Vault is best-effort ephemeral memory protection.
 - Vault data clears on server restart (previously completed documents gracefully display safe placeholders).
 - No email-based password reset or un-marking of already-masked tokens in this demo release.

@@ -16,7 +16,7 @@ import { ConfirmDialog } from "@/components/ui/Modal";
 import { TableSkeleton } from "@/components/ui/Skeleton";
 import { apiRequest, emitToast } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { formatDateOnly, formatDateTime } from "@/lib/format";
+import { formatDateOnly, formatDateTime, formatUserAgent } from "@/lib/format";
 import type { AuthUser, SessionInfo } from "@/lib/types";
 
 const profileSchema = z.object({
@@ -431,8 +431,11 @@ function ProfileContent() {
               <tbody className="divide-y divide-border">
                 {(sessionsData?.items || []).map((sess) => (
                   <tr key={sess.id}>
-                    <td className="max-w-[220px] truncate px-3 py-2.5 text-text">
-                      {sess.user_agent || "Browser session"}
+                    <td
+                      className="max-w-[260px] truncate px-3 py-2.5 text-text"
+                      title={sess.user_agent || undefined}
+                    >
+                      <span>{formatUserAgent(sess.user_agent)}</span>
                       {sess.is_current && (
                         <span className="ml-2 rounded bg-accent-tint px-1.5 py-0.5 text-[11px] font-medium text-accent">
                           This device

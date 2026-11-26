@@ -16,6 +16,7 @@ from app.errors import ErrorCode, build_error_response, register_exception_handl
 from app.logging import configure_logging, request_id_var
 from app.ratelimit import register_rate_limiter
 from app.routers import admin, audit, auth, complaints, dashboard, documents, health, me
+from app.services.llm.router import log_llm_startup_config
 from app.services.memory import log_process_rss
 from app.services.vault import run_startup_recovery, vault
 
@@ -130,6 +131,7 @@ async def _lifespan(_application: FastAPI) -> AsyncIterator[None]:
             logger.warning("Startup recovery skipped", extra={"event": "startup_recovery_skipped"})
     vault.start_sweeper()
     log_process_rss("startup")
+    log_llm_startup_config()
     try:
         yield
     finally:
