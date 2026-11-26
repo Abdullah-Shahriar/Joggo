@@ -7,9 +7,9 @@ Read order each session: `brain.md` → `rules.md` → `architecture.md` → `de
 
 ## 1. Status (edit me)
 
-- Current milestone: **M0 (complete — ready for M1)**
+- Current milestone: **M1 (complete — starting M2)**
 - Last updated: 2026-11-26
-- Last full test run: pass (4/4 backend pytest; frontend `tsc --noEmit` & `next build` passed)
+- Last full test run: pass (8/8 backend pytest against fresh PostgreSQL)
 - Blockers: none
 
 ## 2. Project summary
@@ -55,8 +55,8 @@ Do the milestones in order. Each has a "Done when". Do not start the next until 
 - **Done when:** `docker compose up --build` serves the health endpoint and the frontend home page from a clean clone.
 
 ### M1 — Database
-- [ ] SQLAlchemy models for all tables (architecture.md §5); Alembic migration; audit-log immutability trigger
-- [ ] `scripts/seed.py` (admin, auditor, demo doctor from env)
+- [x] SQLAlchemy models for all tables (architecture.md §5); Alembic migration; audit-log immutability trigger
+- [x] `scripts/seed.py` (admin, auditor, demo doctor from env)
 - **Done when:** migration applies on an empty DB; seed is idempotent; trigger blocks UPDATE/DELETE on `audit_logs`.
 
 ### M2 — Auth, RBAC, audit
@@ -151,3 +151,4 @@ Detection is rule + small-model based and not perfect → mandatory human review
 ## 10. Changelog (append only, newest last)
 
 - 2026-11-26 — M0 — Added docs/ specs, root scaffold (.env.example, docker-compose.yml, README.md), FastAPI backend scaffold (/api/health, standard error handlers, request-id + S11 security middleware, PHI-safe JSON logging, M0 tests), and Next.js 14 frontend scaffold (Tailwind tokens, Inter font, /api rewrites).
+- 2026-11-26 — M1 — Added SQLAlchemy 2.0 models for all 9 tables, Alembic initial migration with audit_logs immutability trigger, idempotent scripts/seed.py, backend Dockerfile startup command, and M1 database tests (8/8 passed on fresh Postgres).
