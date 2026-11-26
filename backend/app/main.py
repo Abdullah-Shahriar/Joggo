@@ -15,7 +15,7 @@ from app.deps import register_session_wipe_hook, verify_csrf
 from app.errors import ErrorCode, build_error_response, register_exception_handlers
 from app.logging import configure_logging, request_id_var
 from app.ratelimit import register_rate_limiter
-from app.routers import audit, auth, documents, health, me
+from app.routers import admin, audit, auth, complaints, dashboard, documents, health, me
 from app.services import jobs
 from app.services.vault import run_startup_recovery, vault
 
@@ -155,6 +155,9 @@ def create_app() -> FastAPI:
     application.include_router(me.router)
     application.include_router(audit.router)
     application.include_router(documents.router)
+    application.include_router(dashboard.router)
+    application.include_router(complaints.router)
+    application.include_router(admin.router)
     application.add_middleware(RequestContextAndSecurityMiddleware)
 
     return application
