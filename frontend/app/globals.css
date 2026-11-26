@@ -87,6 +87,37 @@
   }
 }
 
+@keyframes cs-upload-lift {
+  0%,
+  100% {
+    transform: translateY(3px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes cs-upload-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+@keyframes cs-scan-beam {
+  0%,
+  100% {
+    transform: translateY(-10px);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(10px);
+    opacity: 1;
+  }
+}
+
 .cs-brand-ring {
   animation: cs-spin 1.2s linear infinite;
   transform-origin: center;
@@ -119,6 +150,18 @@
 .cs-check-draw {
   stroke-dasharray: 24;
   animation: cs-check-draw 300ms ease-out forwards;
+}
+
+.cs-upload-lift {
+  animation: cs-upload-lift 1.3s ease-in-out infinite;
+}
+
+.cs-upload-shimmer {
+  animation: cs-upload-shimmer 1.4s ease-in-out infinite;
+}
+
+.cs-scan-beam {
+  animation: cs-scan-beam 1.6s ease-in-out infinite;
 }
 
 .cs-no-copy {

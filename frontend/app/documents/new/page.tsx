@@ -1,13 +1,14 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Camera, FileText, RefreshCw, Upload, X } from "lucide-react";
+import { Camera, FileText, FileUp, RefreshCw, ShieldCheck, Upload, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/Button";
+import { LoaderHelix } from "@/components/ui/loader-helix";
 import { ApiError, apiRequest } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatBytes } from "@/lib/format";
@@ -73,6 +74,7 @@ function NewDocumentContent() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<{
     message: string;
     existingDocumentId?: string;
@@ -252,7 +254,14 @@ function NewDocumentContent() {
       return;
     }
     setSubmitting(true);
+    setUploadProgress(14);
     setUploadError(null);
+
+    const startedAt = Date.now();
+    const progressTimer = setInterval(() => {
+      setUploadProgress((prev) => (prev < 88 ? Math.min(88, prev + 12) : prev));
+    }, 160);
+
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
@@ -262,8 +271,17 @@ function NewDocumentContent() {
         body: formData,
         silentErrorToast: true,
       });
+      clearInterval(progressTimer);
+      setUploadProgress(100);
+      // Keep the upload animation smoothly visible for at least 700ms so users clearly see upload completion
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < 700) {
+        await new Promise((resolve) => setTimeout(resolve, 700 - elapsed));
+      }
       setUploadedDocId(res.id);
     } catch (err) {
+      clearInterval(progressTimer);
+      setUploadProgress(0);
       if (err instanceof ApiError) {
         setUploadError({
           message: err.message,
@@ -295,15 +313,74 @@ function NewDocumentContent() {
         </div>
       )}
 
-      {uploadedDocId ? (
-        <section className="mt-8 rounded border border-border bg-bg p-6" aria-live="polite">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-lg font-semibold text-text">Cleaning your document</h2>
-              <p className="mt-1 text-[15px] text-text-muted">
-                Reading the page, finding personal details, replacing them with safe labels, and
-                running a safety check.
+      {submitting ? (
+        <section
+          aria-live="polite"
+          aria-label="Uploading file"
+          className="mt-8 rounded-lg border border-accent/40 bg-bg p-6 shadow-[0_4px_16px_rgba(15,118,110,0.08)] sm:p-8"
+        >
+          <div className="flex flex-col items-center text-center">
+            <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl border border-accent/30 bg-accent-tint">
+              <FileUp
+                aria-hidden="true"
+                className="cs-upload-lift h-9 w-9 text-accent"
+              />
+              <span
+                aria-hidden="true"
+                className="cs-scan-beam absolute inset-x-3 h-0.5 rounded-full bg-accent/60"
+              />
+            </div>
+
+            <h2 className="mt-5 text-lg font-semibold text-text">
+              {uploadProgress >= 100 ? "Upload complete — starting privacy scan…" : "Uploading your document…"}
+            </h2>
+            {selectedFile && (
+              <p className="mt-1 text-sm text-text-muted">
+                {selectedFile.name} · {formatBytes(selectedFile.size)}
               </p>
+            )}
+
+            <div className="mt-6 w-full max-w-md">
+              <div className="mb-1.5 flex items-center justify-between text-xs font-medium">
+                <span className="text-text-muted">Securing file transfer</span>
+                <span className="text-accent">{uploadProgress}%</span>
+              </div>
+              <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-bg-subtle border border-border">
+                <div
+                  className="relative h-full overflow-hidden rounded-full bg-accent transition-all duration-200 ease-out"
+                  style={{ width: `${uploadProgress}%` }}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="cs-upload-shimmer absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-white/40 to-transparent"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <LoaderHelix variant="dna" dots={8} speed={1.5} />
+            </div>
+          </div>
+        </section>
+      ) : uploadedDocId ? (
+        <section className="mt-8 rounded-lg border border-border bg-bg p-6 shadow-[0_2px_10px_rgba(17,24,39,0.05)]" aria-live="polite">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-accent/30 bg-accent-tint">
+                <ShieldCheck aria-hidden="true" className="h-5 w-5 text-accent" />
+                <span
+                  aria-hidden="true"
+                  className="cs-scan-beam absolute inset-x-1.5 h-0.5 rounded-full bg-accent/60"
+                />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-text">Cleaning your document</h2>
+                <p className="mt-0.5 text-[15px] text-text-muted">
+                  Reading the page, finding personal details, hiding them with safe labels, and
+                  running a safety check.
+                </p>
+              </div>
             </div>
             <span className="rounded bg-accent-tint px-2.5 py-1 text-xs font-semibold text-accent">
               Step{" "}

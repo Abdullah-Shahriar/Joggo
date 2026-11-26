@@ -10,7 +10,9 @@ import {
   FileText,
   HelpCircle,
   Lock,
+  Sparkles,
   Trash2,
+  Wand2,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
@@ -149,10 +151,25 @@ function renderFormattedOriginal(
   );
 }
 
+const VALID_MARK_TYPES = new Set<string>(MARK_TYPES.map((m) => m.value));
+
+function mapFindingTypeToMarkType(findingType: string): string {
+  const upper = findingType.toUpperCase();
+  if (VALID_MARK_TYPES.has(upper)) return upper;
+  if (upper === "LEAK_NAME_COMPONENT") return "PERSON";
+  return "OTHER";
+}
+
 function renderModifiedPdfLines(
   text: string,
   findings: SafetyFindingView[],
   activeJumpIdx: number | null,
+  options: {
+    canAutoFix: boolean;
+    fixingIdx: number | null;
+    fixingAll: boolean;
+    onAutoFixFinding: (finding: SafetyFindingView, findingIdx: number) => void;
+  },
 ) {
   const rawLines = text.split("\n");
   let cursor = 0;
@@ -168,23 +185,45 @@ function renderModifiedPdfLines(
     const hasIssue = matchingFindings.length > 0;
     const isActiveJump =
       activeJumpIdx !== null && matchingFindings.some(({ fIdx }) => fIdx === activeJumpIdx);
+    const primaryFinding = hasIssue ? matchingFindings[0].f : null;
     const primaryFindingIdx = hasIssue ? matchingFindings[0].fIdx : null;
     const trimmed = line.trim();
 
-    if (hasIssue) {
+    if (hasIssue && primaryFinding && primaryFindingIdx !== null) {
+      const canFixLine =
+        options.canAutoFix &&
+        Boolean(primaryFinding.snippet && primaryFinding.snippet.trim().length >= 2);
+      const isFixingThis = options.fixingIdx === primaryFindingIdx;
+
       return (
         <div
           key={lineIdx}
-          id={primaryFindingIdx !== null ? `safety-issue-${primaryFindingIdx}` : undefined}
+          id={`safety-issue-${primaryFindingIdx}`}
           className={`my-1.5 rounded-r border-l-4 border-danger bg-danger-tint px-3 py-2 text-danger ${
             isActiveJump ? "ring-2 ring-danger ring-offset-1" : ""
           }`}
         >
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="font-medium text-danger">{renderTokensInLine(line || " ")}</span>
-            <span className="shrink-0 rounded bg-bg px-1.5 py-0.5 text-[11px] font-semibold text-danger">
-              Needs review: {matchingFindings[0].f.type}
-            </span>
+            <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+              <span className="rounded bg-bg px-1.5 py-0.5 text-[11px] font-semibold text-danger border border-danger/30">
+                Conflict: {primaryFinding.type}
+              </span>
+              {canFixLine && (
+                <button
+                  type="button"
+                  disabled={options.fixingAll || options.fixingIdx !== null}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    options.onAutoFixFinding(primaryFinding, primaryFindingIdx);
+                  }}
+                  className="inline-flex h-7 items-center gap-1 rounded border border-danger bg-bg px-2 text-[11px] font-semibold text-danger shadow-sm transition-colors hover:bg-danger hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Wand2 className="h-3 w-3" aria-hidden="true" />
+                  <span>{isFixingThis ? "Fixing…" : "Auto-fix line"}</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       );
@@ -311,6 +350,9 @@ function DocumentReviewContent() {
   const [filePreview, setFilePreview] = useState<{ url: string; mime: string } | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
   const [activeFindingIdx, setActiveFindingIdx] = useState<number | null>(null);
+  const [fixingFindingIdx, setFixingFindingIdx] = useState<number | null>(null);
+  const [autoFixingAll, setAutoFixingAll] = useState(false);
+  const [autoFixProgress, setAutoFixProgress] = useState<{ done: number; total: number } | null>(null);
 
   const resultSectionRef = useRef<HTMLElement>(null);
   const cleanedRef = useRef<HTMLDivElement>(null);
@@ -470,6 +512,124 @@ function DocumentReviewContent() {
     if (findings.length === 0) return;
     const nextIdx = activeFindingIdx === null ? 0 : (activeFindingIdx + 1) % findings.length;
     jumpToIssue(nextIdx);
+  };
+
+  const handleAutoFixLine = async (finding: SafetyFindingView, findingIdx: number) => {
+    if (!doc || doc.vault_expired) return;
+    const snippet = (finding.snippet || "").trim();
+    if (snippet.length < 2 || snippet.length > 200) {
+      emitToast({
+        kind: "error",
+        message: "This line cannot be auto-fixed. Please highlight the text manually to hide it.",
+      });
+      return;
+    }
+
+    setFixingFindingIdx(findingIdx);
+    setActiveFindingIdx(findingIdx);
+    try {
+      await apiRequest(`/documents/${docId}/manual-marks`, {
+        method: "POST",
+        headers: { "If-Match": String(doc.version) },
+        body: {
+          text: snippet,
+          entity_type: mapFindingTypeToMarkType(finding.type),
+        },
+      });
+      setSelectedText("");
+      setActiveFindingIdx(null);
+      await queryClient.invalidateQueries({ queryKey: ["document", docId] });
+      emitToast({ kind: "success", message: "Line conflict fixed and hidden everywhere." });
+    } catch {
+      // apiRequest already emits toast
+    } finally {
+      setFixingFindingIdx(null);
+    }
+  };
+
+  const handleAutoFixAll = async () => {
+    if (!doc || doc.vault_expired || autoFixingAll) return;
+    const initialFindings = sanitizedData?.findings || [];
+    if (initialFindings.length === 0) return;
+
+    setAutoFixingAll(true);
+    setAutoFixProgress({ done: 0, total: initialFindings.length });
+
+    let fixedCount = 0;
+    const failedSnippets = new Set<string>();
+    const maxSteps = Math.max(initialFindings.length + 4, 20);
+
+    try {
+      for (let step = 0; step < maxSteps; step++) {
+        const fresh = await apiRequest<SanitizedTextResponse>(`/documents/${docId}/sanitized`, {
+          silentErrorToast: true,
+        });
+        if (!fresh.findings || fresh.findings.length === 0) {
+          break;
+        }
+
+        const nextCandidateIdx = fresh.findings.findIndex((f) => {
+          const s = (f.snippet || "").trim();
+          return s.length >= 2 && s.length <= 200 && !failedSnippets.has(s.toLowerCase());
+        });
+
+        if (nextCandidateIdx === -1) {
+          break;
+        }
+
+        const candidate = fresh.findings[nextCandidateIdx];
+        const snippet = (candidate.snippet || "").trim();
+        setFixingFindingIdx(nextCandidateIdx);
+        setActiveFindingIdx(nextCandidateIdx);
+
+        try {
+          await apiRequest(`/documents/${docId}/manual-marks`, {
+            method: "POST",
+            headers: { "If-Match": String(fresh.version) },
+            body: {
+              text: snippet,
+              entity_type: mapFindingTypeToMarkType(candidate.type),
+            },
+            silentErrorToast: true,
+          });
+          fixedCount += 1;
+          setAutoFixProgress({
+            done: fixedCount,
+            total: Math.max(initialFindings.length, fixedCount),
+          });
+          await queryClient.invalidateQueries({ queryKey: ["document", docId] });
+        } catch {
+          failedSnippets.add(snippet.toLowerCase());
+        }
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["document", docId] });
+      const finalCheck = await apiRequest<SanitizedTextResponse>(`/documents/${docId}/sanitized`, {
+        silentErrorToast: true,
+      });
+
+      if (!finalCheck.findings || finalCheck.findings.length === 0) {
+        emitToast({
+          kind: "success",
+          message: `Resolved all conflicts automatically (${fixedCount} step${fixedCount === 1 ? "" : "s"}). Ready to approve and generate!`,
+        });
+      } else if (fixedCount > 0) {
+        emitToast({
+          kind: "success",
+          message: `Fixed ${fixedCount} conflict${fixedCount === 1 ? "" : "s"}. Please highlight any remaining red lines manually.`,
+        });
+      } else {
+        emitToast({
+          kind: "error",
+          message: "Could not auto-fix the remaining conflicts. Please highlight the red text manually.",
+        });
+      }
+    } finally {
+      setFixingFindingIdx(null);
+      setActiveFindingIdx(null);
+      setAutoFixingAll(false);
+      setAutoFixProgress(null);
+    }
   };
 
   const handleCleanedMouseUp = () => {
@@ -698,49 +858,84 @@ function DocumentReviewContent() {
                 <div className="flex items-center gap-2 font-semibold">
                   <AlertTriangle className="h-5 w-5 shrink-0" aria-hidden="true" />
                   <span>
-                    Safety check paused sending ({findings.length} item
-                    {findings.length === 1 ? "" : "s"} need review). Highlight the red lines on the
-                    left page and replace them to continue.
+                    Safety check found {findings.length} conflict
+                    {findings.length === 1 ? "" : "s"}. Fix them manually by highlighting red text,
+                    auto-fix line by line, or resolve all at once.
                   </span>
                 </div>
 
                 {hasSafetyIssues && (
-                  <button
-                    type="button"
-                    onClick={handleCycleJump}
-                    className="inline-flex h-11 items-center gap-2 rounded border-2 border-danger bg-bg px-4 text-sm font-semibold text-danger shadow-sm hover:bg-danger hover:text-white"
-                  >
-                    <ArrowDownCircle className="h-4 w-4" aria-hidden="true" />
-                    <span>
-                      Jump to red issue{" "}
-                      {activeFindingIdx !== null
-                        ? `(${((activeFindingIdx + 1) % findings.length) + 1}/${findings.length})`
-                        : `(1/${findings.length})`}
-                    </span>
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!doc.vault_expired && (
+                      <Button
+                        size="sm"
+                        loading={autoFixingAll}
+                        disabled={fixingFindingIdx !== null && !autoFixingAll}
+                        onClick={() => void handleAutoFixAll()}
+                        className="h-10 px-4"
+                      >
+                        <Sparkles className="h-4 w-4" aria-hidden="true" />
+                        {autoFixingAll && autoFixProgress
+                          ? `Fixing ${autoFixProgress.done}/${autoFixProgress.total}…`
+                          : `Auto-fix all (${findings.length})`}
+                      </Button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleCycleJump}
+                      className="inline-flex h-10 items-center gap-2 rounded border-2 border-danger bg-bg px-4 text-sm font-semibold text-danger shadow-sm hover:bg-danger hover:text-white"
+                    >
+                      <ArrowDownCircle className="h-4 w-4" aria-hidden="true" />
+                      <span>
+                        Jump to red issue{" "}
+                        {activeFindingIdx !== null
+                          ? `(${((activeFindingIdx + 1) % findings.length) + 1}/${findings.length})`
+                          : `(1/${findings.length})`}
+                      </span>
+                    </button>
+                  </div>
                 )}
               </div>
 
               {hasSafetyIssues && (
                 <ul className="mt-3 space-y-2 border-t border-danger/20 pt-3 text-sm">
-                  {findings.map((f, i) => (
-                    <li
-                      key={`${f.start}-${i}`}
-                      className="flex flex-wrap items-center justify-between gap-2"
-                    >
-                      <span>
-                        <strong>{f.type}:</strong> {f.reason}
-                        {f.snippet ? ` ("${f.snippet}")` : ""}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => jumpToIssue(i)}
-                        className="inline-flex h-9 items-center gap-1 rounded border border-danger bg-bg px-3.5 text-xs font-semibold text-danger hover:bg-danger hover:text-white"
+                  {findings.map((f, i) => {
+                    const canFixItem =
+                      !doc.vault_expired && Boolean(f.snippet && f.snippet.trim().length >= 2);
+                    const isFixingThis = fixingFindingIdx === i;
+                    return (
+                      <li
+                        key={`${f.start}-${i}`}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded bg-bg/60 px-2.5 py-1.5"
                       >
-                        Jump to line
-                      </button>
-                    </li>
-                  ))}
+                        <span>
+                          <strong>{f.type}:</strong> {f.reason}
+                          {f.snippet ? ` ("${f.snippet}")` : ""}
+                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {canFixItem && (
+                            <button
+                              type="button"
+                              disabled={autoFixingAll || fixingFindingIdx !== null}
+                              onClick={() => void handleAutoFixLine(f, i)}
+                              className="inline-flex h-8 items-center gap-1 rounded border border-accent bg-bg px-3 text-xs font-semibold text-accent hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
+                              <span>{isFixingThis ? "Fixing…" : "Auto-fix line"}</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => jumpToIssue(i)}
+                            className="inline-flex h-8 items-center gap-1 rounded border border-danger bg-bg px-3 text-xs font-semibold text-danger hover:bg-danger hover:text-white"
+                          >
+                            Jump to line
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
@@ -839,14 +1034,27 @@ function DocumentReviewContent() {
               </div>
             </div>
             {hasSafetyIssues ? (
-              <button
-                type="button"
-                onClick={handleCycleJump}
-                className="inline-flex h-9 items-center gap-1.5 rounded border-2 border-danger bg-bg px-3 text-xs font-semibold text-danger hover:bg-danger hover:text-white sm:px-3.5"
-              >
-                <ArrowDownCircle className="h-4 w-4" aria-hidden="true" />
-                <span>Jump to issue ({findings.length})</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {!doc.vault_expired && (
+                  <Button
+                    size="sm"
+                    loading={autoFixingAll}
+                    disabled={fixingFindingIdx !== null && !autoFixingAll}
+                    onClick={() => void handleAutoFixAll()}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                    {autoFixingAll ? "Fixing…" : "Auto-fix all"}
+                  </Button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleCycleJump}
+                  className="inline-flex h-8 items-center gap-1.5 rounded border-2 border-danger bg-bg px-3 text-xs font-semibold text-danger hover:bg-danger hover:text-white"
+                >
+                  <ArrowDownCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Jump ({findings.length})</span>
+                </button>
+              </div>
             ) : (
               <span className="rounded border border-border bg-bg-subtle px-2 py-0.5 text-[11px] font-medium text-text-muted">
                 {doc.page_count} {doc.page_count === 1 ? "page" : "pages"}
@@ -896,7 +1104,14 @@ function DocumentReviewContent() {
                 <PaneSkeleton />
               ) : sanitizedData ? (
                 <div className="break-words font-sans">
-                  {renderModifiedPdfLines(sanitizedData.sanitized_text, findings, activeFindingIdx)}
+                  {renderModifiedPdfLines(sanitizedData.sanitized_text, findings, activeFindingIdx, {
+                    canAutoFix:
+                      !doc.vault_expired &&
+                      ["BLOCKED", "REVIEW_REQUIRED", "APPROVED"].includes(doc.status),
+                    fixingIdx: fixingFindingIdx,
+                    fixingAll: autoFixingAll,
+                    onAutoFixFinding: (f, idx) => void handleAutoFixLine(f, idx),
+                  })}
                 </div>
               ) : (
                 <p className="text-sm text-text-muted">Cleaned document is not available.</p>
