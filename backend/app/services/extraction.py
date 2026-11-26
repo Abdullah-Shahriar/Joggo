@@ -16,6 +16,7 @@ from app.errors import ErrorCode
 logger = logging.getLogger("app.extraction")
 
 PAGE_OCR_TEXT_THRESHOLD = 40
+MAX_OCR_DPI = 200
 MIN_IMAGE_DIMENSION = 100
 PER_PAGE_OCR_TIMEOUT_SECONDS = 20
 WHOLE_DOC_TIMEOUT_SECONDS = 120
@@ -206,7 +207,7 @@ def extract_pdf(
             if len(combined_page) < PAGE_OCR_TEXT_THRESHOLD:
                 _check_doc_deadline(start, whole_doc_timeout)
                 try:
-                    pix = page.get_pixmap(dpi=200)
+                    pix = page.get_pixmap(dpi=MAX_OCR_DPI)
                     img = Image.open(io.BytesIO(pix.tobytes("png")))
                     ocr_text = pytesseract.image_to_string(
                         img,

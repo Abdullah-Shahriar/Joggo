@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     VAULT_IDLE_MINUTES: int = 30
     VAULT_ABSOLUTE_HOURS: int = 8
     VAULT_MAX_MB: int = 300
+    PIPELINE_MAX_WORKERS: int | None = None
     ADMIN_SEED_EMAIL: str = ""
     ADMIN_SEED_PASSWORD: str = ""
     AUDITOR_SEED_EMAIL: str = ""
@@ -50,6 +51,19 @@ class Settings(BaseSettings):
         if trimmed.startswith("postgresql://"):
             return "postgresql+psycopg://" + trimmed[len("postgresql://") :]
         return trimmed
+
+    @field_validator("PIPELINE_MAX_WORKERS", mode="before")
+    @classmethod
+    def _empty_workers_to_none(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @property
+    def effective_pipeline_max_workers(self) -> int:
+        if self.PIPELINE_MAX_WORKERS is not None and self.PIPELINE_MAX_WORKERS >= 1:
+            return self.PIPELINE_MAX_WORKERS
+        return 2 if self.ENV == "prod" else 4
 
     @property
     def llm_providers(self) -> list[str]:

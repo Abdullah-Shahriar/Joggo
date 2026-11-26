@@ -8,11 +8,13 @@ from presidio_analyzer.nlp_engine import NlpEngineProvider
 from app.config import get_settings
 from app.services.detection.base import Span, has_adjacent_medical_unit
 from app.services.detection.stoplists import COMMON_WORDS, MEDICAL_TERMS, is_country
+from app.services.memory import log_process_rss
 
 logger = logging.getLogger("app.detection.presidio")
 
 _lock = threading.Lock()
 _analyzer: AnalyzerEngine | None = None
+_load_count = 0
 
 PRESIDIO_TO_TYPE: dict[str, str] = {
     "PERSON": "PERSON",
@@ -27,7 +29,7 @@ PRESIDIO_ENTITIES: list[str] = list(PRESIDIO_TO_TYPE.keys())
 
 
 def _get_analyzer() -> AnalyzerEngine:
-    global _analyzer
+    global _analyzer, _load_count
     if _analyzer is not None:
         return _analyzer
     with _lock:
@@ -42,6 +44,8 @@ def _get_analyzer() -> AnalyzerEngine:
         )
         nlp_engine = provider.create_engine()
         _analyzer = AnalyzerEngine(nlp_engine=nlp_engine, supported_languages=["en"])
+        _load_count += 1
+        log_process_rss("presidio_loaded")
         return _analyzer
 
 

@@ -965,7 +965,7 @@ function DocumentReviewContent() {
       {/* Banners */}
       {vaultExpiredBeforeApproval && (
         <div role="alert" className="mt-4 rounded border border-danger bg-danger-tint px-4 py-3 text-[15px] text-danger">
-          Temporary private memory expired. Please upload the file again.
+          The server restarted, so original details were cleared. Upload the file again.
         </div>
       )}
 
@@ -974,7 +974,11 @@ function DocumentReviewContent() {
           role="alert"
           className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded border border-danger bg-danger-tint px-4 py-3 text-[15px] text-danger"
         >
-          <span>Could not process this file ({doc.failure_code || "ERROR"}).</span>
+          <span>
+            {doc.failure_code === "SERVER_RESTART" || doc.vault_expired
+              ? "The server restarted, so original details were cleared. Upload the file again."
+              : `Could not process this file (${doc.failure_code || "ERROR"}).`}
+          </span>
           {!doc.vault_expired && (
             <Button
               variant="secondary"
@@ -1364,7 +1368,7 @@ function DocumentReviewContent() {
             {doc.vault_expired ? (
               <div className="mx-auto flex min-h-full w-full items-center justify-center rounded-[2px] border border-[#D1D5DB] bg-white p-8 text-center shadow-[0_2px_10px_rgba(17,24,39,0.08)]">
                 <p className="max-w-xs text-sm text-text-muted">
-                  Original details have expired and were removed from temporary private memory.
+                  The server restarted, so original details were cleared. Upload the file again.
                 </p>
               </div>
             ) : originalTab === "file" ? (
@@ -1548,7 +1552,8 @@ function DocumentReviewContent() {
                 )}
                 {resultData.vault_expired && (
                   <p className="mb-3 rounded bg-bg-subtle px-3 py-2 text-xs text-text-muted">
-                    Original details have expired, so safe labels are shown instead.
+                    The server restarted, so original details were cleared. Upload the file again to
+                    restore real details; safe labels are shown below.
                   </p>
                 )}
                 {resultData.warnings.length > 0 && (

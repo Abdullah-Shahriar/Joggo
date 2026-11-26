@@ -426,3 +426,31 @@ def test_session_hint_cookie_lifecycle_and_multifield_validation(app: FastAPI, m
         assert any("joggo_session=1" in h for h in gl.headers.get_list("set-cookie"))
     finally:
         client.__exit__(None, None, None)
+
+
+def test_memory_singleton_worker_cap_and_rss_logging() -> None:
+    from app.config import Settings
+    from app.services.detection import presidio_engine
+    from app.services.extraction import MAX_OCR_DPI
+    from app.services.memory import get_process_rss_mb, log_process_rss
+
+    # Worker thread caps: default 2 in prod, 4 in dev, env override honored
+    assert Settings(ENV="prod", PIPELINE_MAX_WORKERS=None).effective_pipeline_max_workers == 2
+    assert Settings(ENV="dev", PIPELINE_MAX_WORKERS=None).effective_pipeline_max_workers == 4
+    assert Settings(ENV="prod", PIPELINE_MAX_WORKERS=3).effective_pipeline_max_workers == 3
+    assert Settings(ENV="prod", PIPELINE_MAX_WORKERS="").effective_pipeline_max_workers == 2  # type: ignore[arg-type]
+
+    # OCR DPI capped at 200
+    assert MAX_OCR_DPI <= 200
+
+    # Presidio / spaCy loaded once (singleton)
+    a1 = presidio_engine._get_analyzer()
+    a2 = presidio_engine._get_analyzer()
+    assert a1 is a2
+    assert presidio_engine._load_count == 1
+
+    # RSS helper returns positive MB
+    rss = get_process_rss_mb()
+    assert rss > 0
+    logged_rss = log_process_rss("test_probe")
+    assert logged_rss > 0

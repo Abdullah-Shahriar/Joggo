@@ -26,6 +26,7 @@ from app.services.detection.base import (
 from app.services.detection.resolve import run_detection
 from app.services.extraction import ExtractionError, extract_document
 from app.services.llm.router import LLMRouterError, route_generate
+from app.services.memory import log_process_rss
 from app.services.safety import run_safety_scan
 from app.services.state import transition
 from app.services.tokenizer import TokenizationResult, tokenize_text
@@ -407,6 +408,7 @@ def run_document_pipeline(doc_id: uuid.UUID, session_family_id: uuid.UUID) -> No
         safety_step.status = PipelineStepStatus.succeeded
         safety_step.finished_at = datetime.now(timezone.utc)
         db.commit()
+        log_process_rss("pipeline_complete", document_id=str(doc_id))
 
 
 def apply_manual_mark(

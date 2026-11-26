@@ -226,7 +226,14 @@ function DocumentsListContent() {
                       onClick={() => router.push(`/documents/${doc.id}`)}
                       className="cursor-pointer hover:bg-bg-subtle"
                     >
-                      <td className="px-3 py-3 font-medium text-text">{doc.original_filename}</td>
+                      <td className="px-3 py-3 font-medium text-text">
+                        <div>{doc.original_filename}</div>
+                        {doc.vault_expired && (
+                          <p className="mt-0.5 text-xs font-normal text-text-muted">
+                            The server restarted, so original details were cleared. Upload the file again.
+                          </p>
+                        )}
+                      </td>
                       <td className="px-3 py-3 text-text-muted">{formatTaskType(doc.task_type)}</td>
                       <td className="px-3 py-3">
                         <DocumentStatusBadge status={doc.status} />

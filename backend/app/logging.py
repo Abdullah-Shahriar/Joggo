@@ -25,6 +25,8 @@ ALLOWED_EXTRA_KEYS: frozenset[str] = frozenset(
         "provider",
         "attempts",
         "latency_ms",
+        "stage",
+        "rss_mb",
     }
 )
 
