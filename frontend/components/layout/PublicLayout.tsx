@@ -38,6 +38,10 @@ export function PublicLayout({
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
     if (redirectIfAuthenticated && !isLoading && user) {
       router.replace(getRoleHome(user.role));
     }
@@ -48,7 +52,7 @@ export function PublicLayout({
   }
 
   return (
-    <div className="flex min-h-screen flex-col overflow-x-hidden bg-bg text-text">
+    <div className="flex min-h-screen flex-col overflow-x-clip bg-bg text-text">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:text-white"
@@ -82,7 +86,13 @@ export function PublicLayout({
             })}
           </nav>
 
-          <div className="hidden sm:block">
+          <div className="hidden items-center gap-3 sm:flex">
+            <Link
+              href="/signup"
+              className="inline-flex h-10 items-center justify-center rounded border border-border bg-bg px-4 text-sm font-medium text-text hover:bg-bg-subtle"
+            >
+              Create account
+            </Link>
             <Link
               href="/login"
               className="inline-flex h-10 items-center justify-center rounded bg-accent px-4 text-sm font-medium text-white hover:bg-accent-hover"
@@ -93,7 +103,8 @@ export function PublicLayout({
 
           <button
             type="button"
-            aria-label="Toggle menu"
+            aria-label="Toggle navigation menu"
+            aria-controls="public-mobile-nav"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((v) => !v)}
             className="inline-flex h-10 w-10 items-center justify-center rounded text-text hover:bg-bg-subtle sm:hidden"
@@ -104,8 +115,9 @@ export function PublicLayout({
 
         {menuOpen && (
           <nav
+            id="public-mobile-nav"
             aria-label="Mobile navigation"
-            className="border-b border-border bg-bg px-4 pb-4 pt-2 sm:hidden"
+            className="border-b border-border bg-bg px-4 pb-4 pt-2 shadow-sm sm:hidden"
           >
             <div className="flex flex-col gap-1">
               {NAV_ITEMS.map((item) => {
@@ -124,13 +136,22 @@ export function PublicLayout({
                   </Link>
                 );
               })}
-              <Link
-                href="/login"
-                onClick={() => setMenuOpen(false)}
-                className="mt-2 inline-flex h-10 items-center justify-center rounded bg-accent px-4 text-sm font-medium text-white hover:bg-accent-hover"
-              >
-                Login
-              </Link>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <Link
+                  href="/signup"
+                  onClick={() => setMenuOpen(false)}
+                  className="inline-flex h-10 items-center justify-center rounded border border-border bg-bg px-3 text-sm font-medium text-text hover:bg-bg-subtle"
+                >
+                  Create account
+                </Link>
+                <Link
+                  href="/login"
+                  onClick={() => setMenuOpen(false)}
+                  className="inline-flex h-10 items-center justify-center rounded bg-accent px-3 text-sm font-medium text-white hover:bg-accent-hover"
+                >
+                  Login
+                </Link>
+              </div>
             </div>
           </nav>
         )}
@@ -142,7 +163,9 @@ export function PublicLayout({
 
       <Footer
         brandName={APP_NAME}
+        brandHref="/"
         brandDescription="Privacy-first AI for medical documents. Hide personal details before any AI request."
+        contactEmail="support@joggo.app"
         navLinks={FOOTER_NAV_LINKS}
         rightNotice="Demo environment — use synthetic data only"
         brandIconContainerClassName="bg-gradient-to-br from-bg to-accent-tint border border-border/80"

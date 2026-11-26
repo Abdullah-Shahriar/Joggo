@@ -1,5 +1,13 @@
+import type { Metadata } from "next";
+
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { APP_NAME } from "@/lib/constants";
+
+export const metadata: Metadata = {
+  title: "About",
+  description:
+    "Learn how JOGGO protects patient privacy using local OCR, HIPAA-18 identifier detection, an encrypted in-memory vault, and tamper-evident audit logs.",
+};
 
 export default function AboutPage() {
   return (

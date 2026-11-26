@@ -26,7 +26,7 @@ const TRUST_SIGNALS = [
 
 export function AuthSplitShell({ children }: { children: ReactNode }) {
   return (
-    <div className="grid min-h-screen grid-cols-1 overflow-x-hidden bg-bg lg:grid-cols-2">
+    <div className="grid min-h-screen grid-cols-1 overflow-x-clip bg-bg lg:grid-cols-2">
       {/* Left 50% pane: Trust visual & clinical confidentiality messaging */}
       <aside
         aria-label="Security and privacy overview"

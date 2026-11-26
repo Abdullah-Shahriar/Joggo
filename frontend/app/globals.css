@@ -9,6 +9,8 @@
     color: #111827;
     font-size: 15px;
     line-height: 1.6;
+    overflow-x: clip;
+    max-width: 100%;
   }
 
   :focus-visible {

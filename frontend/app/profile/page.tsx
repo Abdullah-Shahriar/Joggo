@@ -185,6 +185,7 @@ function ProfileContent() {
     try {
       const resized = await resizeImageToDataUrl(file);
       setAvatarDraft(resized);
+      emitToast({ kind: "success", message: "Photo ready — click Save changes to update." });
     } catch {
       setAvatarError("Could not process the selected image.");
     }
@@ -267,7 +268,14 @@ function ProfileContent() {
               {avatarDraft ? "Change photo" : "Upload photo"}
             </Button>
             {avatarDraft && (
-              <Button variant="ghost" size="sm" onClick={() => setAvatarDraft(null)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setAvatarDraft(null);
+                  emitToast({ kind: "success", message: "Photo removed — click Save changes to apply." });
+                }}
+              >
                 <Trash2 className="h-4 w-4 text-danger" />
                 Remove
               </Button>
@@ -331,7 +339,11 @@ function ProfileContent() {
         <dl className="grid grid-cols-1 gap-3 border-t border-border pt-4 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-xs text-text-muted">Email</dt>
-            <dd className="text-text">{user.email}</dd>
+            <dd className="break-all text-text">
+              <a href={`mailto:${user.email}`} className="text-accent hover:underline">
+                {user.email}
+              </a>
+            </dd>
           </div>
           <div>
             <dt className="text-xs text-text-muted">Role</dt>

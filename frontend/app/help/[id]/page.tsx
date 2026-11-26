@@ -58,8 +58,8 @@ function HelpDetailContent() {
       </Link>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
-        <div>
-          <h1 className="text-xl font-semibold text-text">{data.subject}</h1>
+        <div className="min-w-0">
+          <h1 className="break-words text-xl font-semibold text-text">{data.subject}</h1>
           <p className="mt-1 text-xs text-text-muted">
             {formatComplaintCategory(data.category)} · Filed {formatDateTime(data.created_at)}
           </p>
@@ -109,7 +109,10 @@ function HelpDetailContent() {
               id="reply-body"
               label="Reply"
               value={replyBody}
-              onChange={(e) => setReplyBody(e.target.value)}
+              onChange={(e) => {
+                setReplyBody(e.target.value);
+                if (replyError) setReplyError(null);
+              }}
               error={replyError || undefined}
             />
             <Button type="submit" loading={replyMutation.isPending}>

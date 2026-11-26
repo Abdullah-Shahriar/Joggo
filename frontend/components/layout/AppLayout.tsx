@@ -31,7 +31,10 @@ const ROLE_MENUS: Record<UserRole, NavItem[]> = {
     { href: "/admin/audit", label: "Audit logs" },
     { href: "/admin/analytics", label: "Analytics" },
   ],
-  auditor: [{ href: "/admin/audit", label: "Audit logs" }],
+  auditor: [
+    { href: "/admin/audit", label: "Audit logs" },
+    { href: "/help", label: "Help" },
+  ],
 };
 
 export function AppLayout({
@@ -66,6 +69,11 @@ export function AppLayout({
   }, [isLoading, user, pathname, router]);
 
   useEffect(() => {
+    setMenuOpen(false);
+    setProfileOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
         setProfileOpen(false);
@@ -90,18 +98,18 @@ export function AppLayout({
 
   const footerQuickLinks = [
     ...navItems.map((item) => ({ label: item.label, href: item.href })),
-    ...(user.role === "auditor" ? [{ label: "Help", href: "/help" }] : []),
     { label: "Profile", href: "/profile" },
   ];
 
   const handleSignOut = async () => {
     setProfileOpen(false);
+    setMenuOpen(false);
     await logout();
     router.replace("/");
   };
 
   return (
-    <div className={`flex min-h-screen flex-col overflow-x-hidden bg-bg text-text ${bottomPaddingClass}`}>
+    <div className={`flex min-h-screen flex-col overflow-x-clip bg-bg text-text ${bottomPaddingClass}`}>
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:text-white"
@@ -202,7 +210,8 @@ export function AppLayout({
 
             <button
               type="button"
-              aria-label="Toggle menu"
+              aria-label="Toggle navigation menu"
+              aria-controls="app-mobile-nav"
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((v) => !v)}
               className="inline-flex h-10 w-10 items-center justify-center rounded text-text hover:bg-bg-subtle lg:hidden"
@@ -214,8 +223,9 @@ export function AppLayout({
 
         {menuOpen && (
           <nav
+            id="app-mobile-nav"
             aria-label="Mobile navigation"
-            className="border-b border-border bg-bg px-4 pb-4 pt-2 lg:hidden"
+            className="border-b border-border bg-bg px-4 pb-4 pt-2 shadow-sm lg:hidden"
           >
             <div className="flex flex-col gap-1">
               {navItems.map((item) => {
@@ -234,6 +244,23 @@ export function AppLayout({
                   </Link>
                 );
               })}
+              <div className="my-1 border-t border-border" />
+              <Link
+                href="/profile"
+                onClick={() => setMenuOpen(false)}
+                className={`rounded px-3 py-2.5 text-sm font-medium ${
+                  pathname === "/profile" ? "bg-accent-tint text-accent" : "text-text hover:bg-bg-subtle"
+                }`}
+              >
+                Profile
+              </Link>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="rounded px-3 py-2.5 text-left text-sm font-medium text-danger hover:bg-danger-tint"
+              >
+                Sign out
+              </button>
             </div>
           </nav>
         )}
@@ -249,7 +276,9 @@ export function AppLayout({
 
       <Footer
         brandName={APP_NAME}
+        brandHref={roleHome}
         brandDescription="Privacy-first AI for medical documents. Hide personal details before any AI request."
+        contactEmail="support@joggo.app"
         navLinks={footerQuickLinks}
         rightNotice="Demo environment — use synthetic data only"
         brandIconContainerClassName="bg-gradient-to-br from-bg to-accent-tint border border-border/80"

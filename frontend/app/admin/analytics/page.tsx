@@ -12,13 +12,17 @@ function BarRow({ label, count, max }: { label: string; count: number; max: numb
   const pct = max > 0 ? Math.max(2, Math.round((count / max) * 100)) : 0;
   return (
     <tr className="border-b border-border">
-      <td className="w-40 py-2 pr-4 text-sm capitalize text-text">{label}</td>
-      <td className="py-2 pr-4">
+      <td className="w-28 py-2 pr-3 text-xs capitalize text-text sm:w-40 sm:pr-4 sm:text-sm">
+        {label}
+      </td>
+      <td className="py-2 pr-3 sm:pr-4">
         <div className="h-2.5 w-full rounded bg-bg-subtle">
           {count > 0 && <div className="h-2.5 rounded bg-accent" style={{ width: `${pct}%` }} />}
         </div>
       </td>
-      <td className="w-16 py-2 text-right text-sm font-medium text-text">{count}</td>
+      <td className="w-12 py-2 text-right text-xs font-medium text-text sm:w-16 sm:text-sm">
+        {count}
+      </td>
     </tr>
   );
 }

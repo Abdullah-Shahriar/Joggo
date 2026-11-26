@@ -13,7 +13,7 @@ import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { BrandLoader } from "@/components/ui/BrandLoader";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/FormFields";
-import { ApiError, apiRequest } from "@/lib/api";
+import { ApiError, apiRequest, emitToast } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { getRoleHome } from "@/lib/constants";
 import type { AuthSessionResponse } from "@/lib/types";
@@ -65,6 +65,7 @@ export default function SignupPage() {
         silentErrorToast: true,
       });
       setUser(data.user);
+      emitToast({ kind: "success", message: "Account created. Welcome to JOGGO!" });
       router.replace(getRoleHome(data.user.role));
     } catch (err) {
       if (err instanceof ApiError) {

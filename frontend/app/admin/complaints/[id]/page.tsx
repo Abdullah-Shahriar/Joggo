@@ -100,11 +100,14 @@ function AdminComplaintDetailContent() {
           flashKey === "status" ? "cs-admin-flash" : ""
         } ${shakeHeader ? "cs-admin-shake" : ""}`}
       >
-        <div>
-          <h1 className="text-xl font-semibold text-text">{data.subject}</h1>
-          <p className="mt-1 text-xs text-text-muted">
-            {data.user_name} ({data.user_email}) · {formatComplaintCategory(data.category)} ·{" "}
-            {formatDateTime(data.created_at)}
+        <div className="min-w-0">
+          <h1 className="break-words text-xl font-semibold text-text">{data.subject}</h1>
+          <p className="mt-1 break-words text-xs text-text-muted">
+            {data.user_name} (
+            <a href={`mailto:${data.user_email}`} className="text-accent hover:underline">
+              {data.user_email}
+            </a>
+            ) · {formatComplaintCategory(data.category)} · {formatDateTime(data.created_at)}
           </p>
           {data.document_id && (
             <p className="mt-2 text-xs text-text-muted">
@@ -181,7 +184,10 @@ function AdminComplaintDetailContent() {
           id="admin-reply-body"
           label="Admin reply"
           value={replyBody}
-          onChange={(e) => setReplyBody(e.target.value)}
+          onChange={(e) => {
+            setReplyBody(e.target.value);
+            if (replyError) setReplyError(null);
+          }}
           error={replyError || undefined}
         />
         <Button type="submit" loading={replyMutation.isPending}>

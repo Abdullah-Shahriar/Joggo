@@ -39,7 +39,15 @@ function AuditLogsContent() {
 
   const verifyMutation = useMutation({
     mutationFn: () => apiRequest<AuditVerifyResponse>("/audit/verify"),
-    onSuccess: (res) => setVerifyResult(res),
+    onSuccess: (res) => {
+      setVerifyResult(res);
+      emitToast({
+        kind: res.ok ? "success" : "error",
+        message: res.ok
+          ? `Audit chain verified (${res.checked} entries intact).`
+          : `Integrity check failed at entry #${res.first_broken_id}.`,
+      });
+    },
   });
 
   const blockAuditCopy = (e: React.SyntheticEvent) => {

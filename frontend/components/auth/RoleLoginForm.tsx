@@ -13,7 +13,7 @@ import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { BrandLoader } from "@/components/ui/BrandLoader";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/FormFields";
-import { ApiError, apiRequest } from "@/lib/api";
+import { ApiError, apiRequest, emitToast } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { getRoleHome, type UserRole } from "@/lib/constants";
 import type { AuthSessionResponse, AuthUser } from "@/lib/types";
@@ -91,6 +91,7 @@ function RoleLoginInner({
         silentErrorToast: true,
       });
       setUser(data.user);
+      emitToast({ kind: "success", message: "Signed in successfully." });
       redirectAfterLogin(data.user);
     } catch (err) {
       if (err instanceof ApiError) {

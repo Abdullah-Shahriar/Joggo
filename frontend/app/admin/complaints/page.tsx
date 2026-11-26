@@ -2,9 +2,11 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
+import { BrandLoader } from "@/components/ui/BrandLoader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Pagination } from "@/components/ui/Pagination";
 import { TableSkeleton } from "@/components/ui/Skeleton";
@@ -14,10 +16,22 @@ import { formatComplaintCategory, formatDateTime } from "@/lib/format";
 import type { ComplaintListResponse } from "@/lib/types";
 
 function AdminComplaintsContent() {
-  const [status, setStatus] = useState("");
+  const searchParams = useSearchParams();
+  const initialStatus = searchParams.get("status") || "";
+  const [status, setStatus] = useState(
+    ["open", "in_progress", "resolved"].includes(initialStatus) ? initialStatus : "",
+  );
   const [category, setCategory] = useState("");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    const paramStatus = searchParams.get("status") || "";
+    if (["open", "in_progress", "resolved", ""].includes(paramStatus)) {
+      setStatus(paramStatus);
+      setPage(1);
+    }
+  }, [searchParams]);
 
   const params = new URLSearchParams();
   if (status) params.set("status", status);
@@ -146,7 +160,9 @@ function AdminComplaintsContent() {
 export default function AdminComplaintsPage() {
   return (
     <AppLayout allowedRoles={["admin"]}>
-      <AdminComplaintsContent />
+      <Suspense fallback={<BrandLoader label="Loading complaints…" />}>
+        <AdminComplaintsContent />
+      </Suspense>
     </AppLayout>
   );
 }

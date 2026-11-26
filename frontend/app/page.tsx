@@ -1,8 +1,15 @@
+import type { Metadata } from "next";
 import { AlertCircle, EyeOff, FileWarning, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { APP_NAME } from "@/lib/constants";
+
+export const metadata: Metadata = {
+  title: `${APP_NAME} — Use AI on Patient Records Without Exposing Patients`,
+  description:
+    "Upload patient PDFs or photos, hide personal details automatically with safe labels, review side-by-side, and generate clinical drafts without leaking PHI.",
+};
 
 const PROBLEM_POINTS = [
   {

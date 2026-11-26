@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/Button";
 import { LoaderHelix } from "@/components/ui/loader-helix";
-import { ApiError, apiRequest } from "@/lib/api";
+import { ApiError, apiRequest, emitToast } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatBytes } from "@/lib/format";
 import type { DocumentDetail, TaskType } from "@/lib/types";
@@ -206,6 +206,7 @@ function NewDocumentContent() {
         });
         handleFilePick(photoFile);
         handleCloseCamera();
+        emitToast({ kind: "success", message: "Photo captured and ready to upload." });
       },
       "image/png",
       0.95,
@@ -279,6 +280,7 @@ function NewDocumentContent() {
         await new Promise((resolve) => setTimeout(resolve, 700 - elapsed));
       }
       setUploadedDocId(res.id);
+      emitToast({ kind: "success", message: "Document uploaded — starting privacy scan." });
     } catch (err) {
       clearInterval(progressTimer);
       setUploadProgress(0);

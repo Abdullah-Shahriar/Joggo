@@ -586,6 +586,7 @@ function DocumentReviewContent() {
   const retryMutation = useMutation({
     mutationFn: () => apiRequest(`/documents/${docId}/retry`, { method: "POST" }),
     onSuccess: async () => {
+      emitToast({ kind: "success", message: "Retrying draft generation…" });
       await queryClient.invalidateQueries({ queryKey: ["document", docId] });
       await queryClient.refetchQueries({ queryKey: ["document", docId] });
     },
@@ -792,6 +793,7 @@ function DocumentReviewContent() {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
+      emitToast({ kind: "success", message: `Downloaded ${fmt.toUpperCase()} file.` });
     } catch {
       // apiBlob already emits error toast
     } finally {
@@ -801,8 +803,12 @@ function DocumentReviewContent() {
 
   const handleCopy = async () => {
     if (!resultData?.text) return;
-    await navigator.clipboard.writeText(resultData.text);
-    emitToast({ kind: "success", message: "Copied to clipboard." });
+    try {
+      await navigator.clipboard.writeText(resultData.text);
+      emitToast({ kind: "success", message: "Copied to clipboard." });
+    } catch {
+      emitToast({ kind: "error", message: "Could not copy to clipboard in this browser." });
+    }
   };
 
   const blockProtectedCopy = (e: React.SyntheticEvent) => {

@@ -1,9 +1,11 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
+import { BrandLoader } from "@/components/ui/BrandLoader";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Textarea } from "@/components/ui/FormFields";
@@ -19,11 +21,23 @@ import type { AdminUserItem, AdminUserListResponse } from "@/lib/types";
 function AdminUsersContent() {
   const { user: currentAdmin } = useAuth();
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const initialStatus = searchParams.get("status") || "";
 
   const [q, setQ] = useState("");
   const [role, setRole] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(
+    ["active", "restricted"].includes(initialStatus) ? initialStatus : "",
+  );
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    const paramStatus = searchParams.get("status") || "";
+    if (["active", "restricted", ""].includes(paramStatus)) {
+      setStatus(paramStatus);
+      setPage(1);
+    }
+  }, [searchParams]);
 
   const [restrictTarget, setRestrictTarget] = useState<AdminUserItem | null>(null);
   const [restrictReason, setRestrictReason] = useState("");
@@ -165,7 +179,11 @@ function AdminUsersContent() {
                         }`}
                       >
                         <td className="px-3 py-3 font-medium text-text">{u.full_name}</td>
-                        <td className="px-3 py-3 text-text-muted">{u.email}</td>
+                        <td className="px-3 py-3 text-text-muted">
+                          <a href={`mailto:${u.email}`} className="text-accent hover:underline">
+                            {u.email}
+                          </a>
+                        </td>
                         <td className="px-3 py-3 capitalize text-text">
                           {isLockedRow ? (
                             u.role
@@ -301,7 +319,9 @@ function AdminUsersContent() {
 export default function AdminUsersPage() {
   return (
     <AppLayout allowedRoles={["admin"]}>
-      <AdminUsersContent />
+      <Suspense fallback={<BrandLoader label="Loading users…" />}>
+        <AdminUsersContent />
+      </Suspense>
     </AppLayout>
   );
 }
