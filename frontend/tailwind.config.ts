@@ -11,6 +11,9 @@ const config: Config = {
       colors: {
         bg: "#FFFFFF",
         "bg-subtle": "#F7F8F9",
+        background: "#FFFFFF",
+        foreground: "#111827",
+        "muted-foreground": "#6B7280",
         border: "#E5E7EB",
         text: "#111827",
         "text-muted": "#6B7280",
@@ -19,6 +22,12 @@ const config: Config = {
         "accent-tint": "#E6F4F1",
         danger: "#B91C1C",
         "danger-tint": "#FEF2F2",
+      },
+      spacing: {
+        34: "8.5rem",
+      },
+      transitionDuration: {
+        400: "400ms",
       },
       fontFamily: {
         sans: ["var(--font-inter)", "system-ui", "-apple-system", "sans-serif"],

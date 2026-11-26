@@ -231,7 +231,18 @@ export function AppLayout({
       <footer className="border-t border-border bg-bg py-3">
         <div className="mx-auto flex max-w-app flex-wrap items-center justify-between gap-2 px-4 text-xs text-text-muted sm:px-6">
           <span>Demo environment — use synthetic data only</span>
-          <span>© {year} {APP_NAME}</span>
+          <span className="inline-flex items-center gap-1.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt=""
+              aria-hidden="true"
+              className="h-4 w-auto object-contain"
+            />
+            <span>
+              © {year} {APP_NAME}
+            </span>
+          </span>
         </div>
       </footer>
     </div>

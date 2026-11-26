@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { BrandLoader } from "@/components/ui/BrandLoader";
 import { Logo } from "@/components/ui/Logo";
+import { Footer } from "@/components/ui/modem-animated-footer";
 import { useAuth } from "@/lib/auth";
 import { APP_NAME, getRoleHome } from "@/lib/constants";
 
@@ -14,6 +15,14 @@ const NAV_ITEMS = [
   { href: "/", label: "Home" },
   { href: "/about", label: "About" },
   { href: "/faq", label: "FAQ" },
+];
+
+const FOOTER_NAV_LINKS = [
+  { label: "Home", href: "/" },
+  { label: "About", href: "/about" },
+  { label: "FAQ", href: "/faq" },
+  { label: "Login", href: "/login" },
+  { label: "Create account", href: "/signup" },
 ];
 
 export function PublicLayout({
@@ -37,8 +46,6 @@ export function PublicLayout({
   if (redirectIfAuthenticated && user) {
     return <BrandLoader fullScreen label="Redirecting…" />;
   }
-
-  const year = new Date().getFullYear();
 
   return (
     <div className="flex min-h-screen flex-col bg-bg text-text">
@@ -133,31 +140,21 @@ export function PublicLayout({
         {children}
       </main>
 
-      <footer className="border-t border-border bg-bg py-8">
-        <div className="mx-auto max-w-app px-4 sm:px-6">
-          <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-center">
-            <div>
-              <Logo />
-              <p className="mt-1.5 text-xs text-text-muted">
-                Privacy-first AI for clinical documents.
-              </p>
-            </div>
-
-            <nav aria-label="Footer navigation" className="flex items-center gap-6 text-sm text-text-muted">
-              {NAV_ITEMS.map((item) => (
-                <Link key={item.href} href={item.href} className="hover:text-text">
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-
-            <p className="text-xs text-text-muted">Demo environment — synthetic data only</p>
-          </div>
-          <div className="mt-6 border-t border-border pt-4 text-xs text-text-muted">
-            © {year} {APP_NAME}
-          </div>
-        </div>
-      </footer>
+      <Footer
+        brandName={APP_NAME}
+        brandDescription="Privacy-first AI for clinical documents. De-identify patient PDFs locally before any AI request."
+        navLinks={FOOTER_NAV_LINKS}
+        rightNotice="Demo environment — use synthetic data only"
+        brandIconContainerClassName="bg-gradient-to-br from-bg to-accent-tint border border-border/80"
+        brandIcon={
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src="/logo.png"
+            alt={`${APP_NAME} logo`}
+            className="h-9 sm:h-12 md:h-16 w-auto object-contain drop-shadow-sm"
+          />
+        }
+      />
     </div>
   );
 }
