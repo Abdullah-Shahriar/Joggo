@@ -3,26 +3,14 @@
 import { ArrowUpRight, Check, ClipboardCheck, ExternalLink, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { emitToast } from "@/lib/api";
-import { formatTaskType } from "@/lib/format";
-import type { TaskType } from "@/lib/types";
+import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { ApiError, apiRequest, emitToast } from "@/lib/api";
 
 export type ExternalAiProvider = "gemini" | "chatgpt" | "claude";
 
 const REDIRECT_DELAY_MS = 1500;
 const MAX_URL_PROMPT_CHARS = 3400;
-
-const TASK_HEADINGS_TEXT: Record<TaskType, string[]> = {
-  discharge_summary: [
-    "## Diagnosis",
-    "## Clinical course",
-    "## Key findings",
-    "## Medications at discharge",
-    "## Follow-up",
-  ],
-  case_summary: ["## Summary", "## Key findings", "## Concerns"],
-  treatment_plan: ["## Assessment", "## Plan", "## Monitoring", "## Follow-up"],
-};
 
 const AI_TARGETS: ReadonlyArray<{
   id: ExternalAiProvider;
@@ -54,20 +42,6 @@ const AI_TARGETS: ReadonlyArray<{
   },
 ];
 
-function buildCleanHandoffPrompt(taskType: TaskType, sanitizedText: string): string {
-  const headings = TASK_HEADINGS_TEXT[taskType].join("\n");
-  return [
-    `Write a structured ${formatTaskType(taskType).toLowerCase()} using only the privacy-safe clinical text below.`,
-    "Copy all placeholders (such as [PATIENT_A], [DOCTOR_1], [DAY_0]) exactly as written and never guess or invent missing details.",
-    "",
-    "Required headings:",
-    headings,
-    "",
-    "Clinical text (de-identified):",
-    sanitizedText.trim(),
-  ].join("\n");
-}
-
 function buildTargetUrl(provider: ExternalAiProvider, promptText: string): {
   url: string;
   truncatedInUrl: boolean;
@@ -78,7 +52,7 @@ function buildTargetUrl(provider: ExternalAiProvider, promptText: string): {
 
   const truncated = promptText.length > MAX_URL_PROMPT_CHARS;
   const queryPayload = truncated
-    ? `${promptText.slice(0, MAX_URL_PROMPT_CHARS)}\n\n[Truncated for URL length — full text is copied to your clipboard; press Ctrl+V to paste everything.]`
+    ? `${promptText.slice(0, MAX_URL_PROMPT_CHARS)}\n\n[Truncated for URL length. Full text is copied to your clipboard; press Ctrl+V to paste everything.]`
     : promptText;
   const encoded = encodeURIComponent(queryPayload);
 
@@ -117,14 +91,18 @@ async function copyTextReliable(text: string): Promise<boolean> {
 }
 
 export function SendToAiButtons({
-  taskType,
-  sanitizedText,
+  documentId,
+  sanitizedSha256,
   disabled = false,
 }: {
-  taskType: TaskType;
-  sanitizedText: string | null | undefined;
+  documentId: string;
+  sanitizedSha256: string | null | undefined;
   disabled?: boolean;
 }) {
+  const [pendingTarget, setPendingTarget] = useState<(typeof AI_TARGETS)[number] | null>(null);
+  const [approvedChecked, setApprovedChecked] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
   const [handoffState, setHandoffState] = useState<{
     provider: ExternalAiProvider;
     providerName: string;
@@ -144,56 +122,92 @@ export function SendToAiButtons({
     };
   }, []);
 
-  const isReady = Boolean(!disabled && sanitizedText && sanitizedText.trim().length > 0);
+  const isReady = Boolean(!disabled && sanitizedSha256);
   const isWaiting = handoffState?.phase === "copied_waiting";
 
-  const handleLaunch = async (target: (typeof AI_TARGETS)[number]) => {
-    if (!isReady || !sanitizedText || isWaiting) return;
+  const openConfirmModal = (target: (typeof AI_TARGETS)[number]) => {
+    if (!isReady || isWaiting) return;
+    setPendingTarget(target);
+    setApprovedChecked(false);
+    setModalError(null);
+  };
 
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
+  const closeConfirmModal = () => {
+    if (submitting) return;
+    setPendingTarget(null);
+    setApprovedChecked(false);
+    setModalError(null);
+  };
 
-    const fullPrompt = buildCleanHandoffPrompt(taskType, sanitizedText);
-    const { url } = buildTargetUrl(target.id, fullPrompt);
-    const copied = await copyTextReliable(fullPrompt);
+  const handleConfirmHandoff = async () => {
+    if (!pendingTarget || !approvedChecked || !sanitizedSha256) return;
 
-    // 1. Clearly indicate to the user that the file text has been copied, and hold for 1.5s
-    setHandoffState({
-      provider: target.id,
-      providerName: target.providerName,
-      phase: "copied_waiting",
-      url,
-      copied,
-      supportsUrlPrefill: target.supportsUrlPrefill,
-    });
+    const target = pendingTarget;
+    setSubmitting(true);
+    setModalError(null);
 
-    emitToast({
-      kind: "success",
-      message: copied
-        ? `File copied in text format! Opening ${target.providerName} in 1.5 seconds…`
-        : `Preparing ${target.providerName} session…`,
-    });
+    try {
+      const res = await apiRequest<{ prompt_text: string }>(
+        `/documents/${documentId}/handoff`,
+        {
+          method: "POST",
+          body: {
+            provider: target.id,
+            sanitized_sha256: sanitizedSha256,
+          },
+          silentErrorToast: true,
+        },
+      );
 
-    // 2. After 1.5 seconds, navigate to the dedicated AI new session
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null;
-      const win = window.open(url, "_blank", "noopener,noreferrer");
-      if (win) {
-        setHandoffState((prev) =>
-          prev ? { ...prev, phase: "opened" } : null,
-        );
-      } else {
-        setHandoffState((prev) =>
-          prev ? { ...prev, phase: "popup_blocked" } : null,
-        );
-        emitToast({
-          kind: "error",
-          message: `Pop-up was blocked by your browser — click "Open ${target.providerName} now" below.`,
-        });
+      setPendingTarget(null);
+      setApprovedChecked(false);
+
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
       }
-    }, REDIRECT_DELAY_MS);
+
+      const { url } = buildTargetUrl(target.id, res.prompt_text);
+      const copied = await copyTextReliable(res.prompt_text);
+
+      setHandoffState({
+        provider: target.id,
+        providerName: target.providerName,
+        phase: "copied_waiting",
+        url,
+        copied,
+        supportsUrlPrefill: target.supportsUrlPrefill,
+      });
+
+      emitToast({
+        kind: "success",
+        message: copied
+          ? `File copied in text format. Opening ${target.providerName} in 1.5 seconds.`
+          : `Opening ${target.providerName} in 1.5 seconds.`,
+      });
+
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        const win = window.open(url, "_blank", "noopener,noreferrer");
+        if (win) {
+          setHandoffState((prev) => (prev ? { ...prev, phase: "opened" } : null));
+        } else {
+          setHandoffState((prev) => (prev ? { ...prev, phase: "popup_blocked" } : null));
+          emitToast({
+            kind: "error",
+            message: `Pop-up was blocked by your browser. Select "Open ${target.providerName} now" below.`,
+          });
+        }
+      }, REDIRECT_DELAY_MS);
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : "Could not prepare external handoff. Please refresh and try again.";
+      setModalError(message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -209,7 +223,7 @@ export function SendToAiButtons({
           <div>
             <h2 className="text-sm font-semibold text-text">Continue in your preferred AI chat</h2>
             <p className="text-xs text-text-muted">
-              Copies your cleaned file in text format, confirms for 1.5s, and opens a new session on the AI website.
+              Confirm your review to copy the cleaned text and open a new session on the AI website.
             </p>
           </div>
         </div>
@@ -218,7 +232,6 @@ export function SendToAiButtons({
         </span>
       </div>
 
-      {/* Clear 1.5-second copied confirmation & redirect banner */}
       {handoffState && (
         <div
           role="status"
@@ -235,13 +248,13 @@ export function SendToAiButtons({
               <span>
                 {handoffState.phase === "copied_waiting"
                   ? handoffState.copied
-                    ? `File copied in text format! Taking you to ${handoffState.providerName} in 1.5s…`
-                    : `Taking you to ${handoffState.providerName} in 1.5s…`
+                    ? `File copied in text format. Taking you to ${handoffState.providerName} in 1.5s.`
+                    : `Taking you to ${handoffState.providerName} in 1.5s.`
                   : handoffState.phase === "opened"
                     ? handoffState.supportsUrlPrefill
-                      ? `File copied & new ${handoffState.providerName} session opened (full text is also on your clipboard).`
-                      : `File copied & new ${handoffState.providerName} session opened — press Ctrl+V inside the chat box.`
-                    : `File copied in text format! Your browser paused the new tab.`}
+                      ? `File copied and new ${handoffState.providerName} session opened.`
+                      : `File copied and new ${handoffState.providerName} session opened. Press Ctrl+V inside the chat box.`
+                    : "File copied in text format. Your browser paused the new tab."}
               </span>
             </div>
 
@@ -288,7 +301,7 @@ export function SendToAiButtons({
               type="button"
               disabled={!isReady || isWaiting}
               aria-label={`${item.label} in a new web session`}
-              onClick={() => void handleLaunch(item)}
+              onClick={() => openConfirmModal(item)}
               className={`group inline-flex h-11 w-full items-center justify-between gap-2.5 rounded-md border px-4 text-sm font-medium shadow-[0_1px_2px_rgba(17,24,39,0.04)] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 ${
                 isThisWaiting
                   ? "border-accent bg-accent-tint text-accent"
@@ -304,7 +317,7 @@ export function SendToAiButtons({
                   className="h-5 w-5 shrink-0 object-contain"
                 />
                 <span className="truncate">
-                  {isThisWaiting ? "Copied! Opening…" : item.label}
+                  {isThisWaiting ? "Copied. Opening…" : item.label}
                 </span>
               </span>
               {isThisWaiting || isThisOpened ? (
@@ -322,9 +335,51 @@ export function SendToAiButtons({
 
       <p className="mt-2.5 text-xs text-text-muted">
         {isReady
-          ? "Your privacy-safe text is always copied to your clipboard first. ChatGPT & Claude also pre-fill the chat box automatically; in Gemini just press Ctrl+V."
-          : "Resolve all red safety conflicts first to unlock opening the privacy-safe text in Gemini, ChatGPT, or Claude."}
+          ? "Drafts written outside JOGGO keep placeholders. Real details can only be restored for drafts generated here."
+          : "Resolve all safety findings first to unlock external AI handoff. Drafts written outside JOGGO keep placeholders. Real details can only be restored for drafts generated here."}
       </p>
+
+      <Modal
+        open={Boolean(pendingTarget)}
+        title={pendingTarget ? `Confirm ${pendingTarget.label}` : "Confirm handoff"}
+        onClose={closeConfirmModal}
+      >
+        <p className="text-sm text-text-muted">
+          Only the cleaned text with placeholders will be copied for{" "}
+          <strong className="font-medium text-text">{pendingTarget?.providerName}</strong>. This
+          action is recorded in the audit log.
+        </p>
+
+        <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded border border-border bg-bg-subtle p-3 text-sm text-text">
+          <input
+            type="checkbox"
+            checked={approvedChecked}
+            onChange={(e) => setApprovedChecked(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
+          />
+          <span>I reviewed the cleaned text and approve sending it</span>
+        </label>
+
+        {modalError && (
+          <div role="alert" className="mt-3 rounded bg-danger-tint px-3 py-2 text-xs text-danger">
+            {modalError}
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="secondary" onClick={closeConfirmModal} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            loading={submitting}
+            disabled={!approvedChecked}
+            onClick={() => void handleConfirmHandoff()}
+          >
+            Continue to {pendingTarget?.providerName}
+          </Button>
+        </div>
+      </Modal>
     </section>
   );
 }

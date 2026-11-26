@@ -140,6 +140,15 @@ class ApproveDocumentRequest(BaseModel):
     sanitized_sha256: str = Field(min_length=64, max_length=64)
 
 
+class ExternalHandoffRequest(BaseModel):
+    provider: Literal["gemini", "chatgpt", "claude"]
+    sanitized_sha256: str = Field(min_length=64, max_length=64)
+
+
+class ExternalHandoffResponse(BaseModel):
+    prompt_text: str
+
+
 class SendDocumentResponse(BaseModel):
     document_id: uuid.UUID
     status: str

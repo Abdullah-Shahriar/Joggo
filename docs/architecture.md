@@ -297,6 +297,7 @@ In one transaction: `SELECT … FOR UPDATE` the document → if an `llm_requests
 Retry (`POST …/retry`) from `LLM_FAILED` uses a fresh server-generated key. Retry from `FAILED` resumes the pipeline from the first non-succeeded step (needs Vault, else 409 `VAULT_EXPIRED`).
 Approve: `REVIEW_REQUIRED → APPROVED` only if `safety_report.status == "PASS"` and the doctor's current sanitized-text hash equals the hash shown (client sends `sanitized_sha256`; mismatch → 409 `STALE_REVIEW`). This makes the approval apply to exactly what was reviewed.
 Optimistic concurrency: `documents.version` increments on every change; manual mark requires `If-Match: <version>` (mismatch → 409 `VERSION_CONFLICT`).
+External handoff: `POST /api/documents/{id}/handoff` `{provider: "gemini"|"chatgpt"|"claude", sanitized_sha256}` (owner, active, rate limit 10/min/user, CSRF). Requires `safety_report.status == "PASS"`, `status ∈ {REVIEW_REQUIRED, APPROVED, COMPLETED, LLM_FAILED}`, and matching `sanitized_sha256` (else 409 `INVALID_STATE` or `STALE_REVIEW`). Does not change document status; writes audit `DOC_EXTERNAL_HANDOFF` (metadata `{"provider"}` only) and returns `{prompt_text}` built server-side from `sanitized_text`.
 Required concurrency tests: two simultaneous `send` → exactly one provider call; two simultaneous manual marks → no lost update; two simultaneous uploads of the same file → exactly one document (unique constraint → 409 `DUPLICATE_DOCUMENT`).
 
 ## 18. Re-hydration and export (`rehydrate.py`, `exporter.py`)
@@ -319,7 +320,7 @@ Fallback: `INTERNAL_ERROR`(500) (generic message; details only in server log wit
 ## 20. Audit log (A03)
 
 `audit.record(action, resource_type, resource_id, outcome, actor, metadata)` called inside the same transaction. Hash chain: `hash = sha256(prev_hash || canonical_json(row_without_hash))`; inserts serialized with `pg_advisory_xact_lock(7001)`. `GET /api/audit/verify` (admin) recomputes the chain and returns `{ok, checked, first_broken_id}`.
-Actions: `AUTH_SIGNUP AUTH_LOGIN_SUCCESS AUTH_LOGIN_FAILED AUTH_LOCKED AUTH_LOGOUT AUTH_REFRESH_REUSE_DETECTED AUTH_GOOGLE_LOGIN PASSWORD_CHANGED DOC_UPLOAD DOC_DUPLICATE DOC_PIPELINE_COMPLETED DOC_PIPELINE_FAILED DOC_SAFETY_BLOCK DOC_MANUAL_MARK DOC_APPROVE DOC_SEND DOC_LLM_FALLBACK DOC_COMPLETE DOC_EXPORT DOC_DELETE DOC_ACCESS_DENIED ADMIN_DOC_ACCESS_DENIED VAULT_WIPE USER_RESTRICT USER_RESTORE USER_ROLE_CHANGE COMPLAINT_CREATE COMPLAINT_REPLY COMPLAINT_STATUS`.
+Actions: `AUTH_SIGNUP AUTH_LOGIN_SUCCESS AUTH_LOGIN_FAILED AUTH_LOCKED AUTH_LOGOUT AUTH_REFRESH_REUSE_DETECTED AUTH_GOOGLE_LOGIN AUTH_PORTAL_DENIED PASSWORD_CHANGED DOC_UPLOAD DOC_DUPLICATE DOC_PIPELINE_COMPLETED DOC_PIPELINE_FAILED DOC_SAFETY_BLOCK DOC_MANUAL_MARK DOC_APPROVE DOC_SEND DOC_EXTERNAL_HANDOFF DOC_LLM_FALLBACK DOC_COMPLETE DOC_EXPORT DOC_DELETE DOC_ACCESS_DENIED ADMIN_DOC_ACCESS_DENIED VAULT_WIPE USER_RESTRICT USER_RESTORE USER_ROLE_CHANGE COMPLAINT_CREATE COMPLAINT_REPLY COMPLAINT_STATUS`.
 Metadata never contains values, filenames or text; only types, counts, codes, short ids.
 
 ## 21. Dynamic data (M05, A08-lite)

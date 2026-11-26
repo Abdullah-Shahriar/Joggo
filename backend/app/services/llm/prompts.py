@@ -48,3 +48,27 @@ def build_user_prompt(task_type: TaskType, sanitized_text: str, *, repair: bool 
         parts.append("")
         parts.append("Return only the required Markdown headings")
     return "\n".join(parts)
+
+
+TASK_LABELS: dict[TaskType, str] = {
+    TaskType.discharge_summary: "discharge summary",
+    TaskType.case_summary: "case summary",
+    TaskType.treatment_plan: "treatment plan",
+}
+
+
+def build_external_handoff_prompt(task_type: TaskType, sanitized_text: str) -> str:
+    """Build privacy-safe external chat handoff prompt using ONLY static instructions + sanitized_text (P3)."""
+    headings_md = "\n".join(f"## {h}" for h in TASK_HEADINGS[task_type])
+    return "\n".join(
+        [
+            f"Write a structured {TASK_LABELS[task_type]} using only the privacy-safe clinical text below.",
+            "Copy all placeholders (such as [PATIENT_A], [DOCTOR_1], [DAY_0]) exactly as written and never guess or invent missing details.",
+            "",
+            "Required headings:",
+            headings_md,
+            "",
+            "Clinical text (de-identified):",
+            sanitized_text.strip(),
+        ]
+    )

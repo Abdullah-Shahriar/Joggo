@@ -1416,11 +1416,11 @@ function DocumentReviewContent() {
         </section>
       </div>
 
-      {/* Direct Web AI Handoff (Zero-API, Zero-Extension Text Format) */}
+      {/* Direct Web AI Handoff (Approved, Audited Text Format) */}
       {canLoadText && doc.status !== "FAILED" && (
         <SendToAiButtons
-          taskType={doc.task_type}
-          sanitizedText={sanitizedData?.sanitized_text}
+          documentId={docId}
+          sanitizedSha256={sanitizedData?.sanitized_sha256 || doc.sanitized_sha256}
           disabled={!safetyPass}
         />
       )}

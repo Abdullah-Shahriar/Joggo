@@ -21,6 +21,7 @@ from app.deps import (
     AuthContext,
     get_client_ip,
     get_owned_document,
+    require_active,
     require_active_doctor_for_documents,
     require_doctor_for_documents,
 )
@@ -30,6 +31,7 @@ from app.models.document import Document, DocumentStatus, TaskType
 from app.models.entity import DocumentEntity
 from app.models.llm_request import LLMRequest, LLMRequestStatus
 from app.models.step import PipelineStep, PipelineStepName, PipelineStepStatus
+from app.models.user import User
 from app.ratelimit import limiter, user_or_ip_key
 from app.schemas.auth import MessageResponse
 from app.schemas.document import (
@@ -40,6 +42,8 @@ from app.schemas.document import (
     DocumentResultResponse,
     DocumentStepsResponse,
     DocumentUploadResponse,
+    ExternalHandoffRequest,
+    ExternalHandoffResponse,
     ManualMarkRequest,
     ManualMarkResponse,
     OriginalHighlight,
@@ -53,6 +57,7 @@ from app.schemas.document import (
 from app.services import audit, jobs
 from app.services.documents_query import query_user_documents
 from app.services.exporter import export_docx, export_jpg, export_pdf, export_png, export_txt
+from app.services.llm.prompts import build_external_handoff_prompt
 from app.services.pipeline import apply_manual_mark, run_document_pipeline, run_llm_stage
 from app.services.rehydrate import rehydrate_text
 from app.services.state import transition
@@ -602,6 +607,60 @@ def approve_document(
     )
     db.commit()
     return _serialize_detail(db, updated)
+
+
+HANDOFF_ALLOWED_STATUSES = frozenset(
+    {
+        DocumentStatus.REVIEW_REQUIRED,
+        DocumentStatus.APPROVED,
+        DocumentStatus.COMPLETED,
+        DocumentStatus.LLM_FAILED,
+    }
+)
+
+
+@router.post("/{document_id}/handoff", response_model=ExternalHandoffResponse)
+@limiter.limit("10/minute", key_func=user_or_ip_key)
+def handoff_document(
+    request: Request,
+    payload: ExternalHandoffRequest,
+    doc: Document = Depends(get_owned_document),
+    active_user: User = Depends(require_active),
+    db: Session = Depends(get_db),
+) -> ExternalHandoffResponse:
+    report = doc.safety_report or {}
+    if (
+        report.get("status") != "PASS"
+        or doc.status not in HANDOFF_ALLOWED_STATUSES
+        or not doc.sanitized_text
+    ):
+        raise AppError(
+            ErrorCode.INVALID_STATE,
+            409,
+            "Document must pass safety check before external handoff.",
+        )
+
+    current_sha = hashlib.sha256(doc.sanitized_text.encode("utf-8")).hexdigest()
+    if payload.sanitized_sha256.lower() != current_sha.lower():
+        raise AppError(
+            ErrorCode.STALE_REVIEW,
+            409,
+            "The cleaned text has changed since you reviewed it. Please review again.",
+        )
+
+    prompt_text = build_external_handoff_prompt(doc.task_type, doc.sanitized_text)
+    audit.record(
+        db,
+        action="DOC_EXTERNAL_HANDOFF",
+        outcome=AuditOutcome.allowed,
+        actor=active_user,
+        resource_type="document",
+        resource_id=str(doc.id),
+        ip=get_client_ip(request),
+        metadata={"provider": payload.provider},
+    )
+    db.commit()
+    return ExternalHandoffResponse(prompt_text=prompt_text)
 
 
 @router.post("/{document_id}/send", response_model=SendDocumentResponse, status_code=202)
