@@ -63,8 +63,10 @@ services:
       dockerfile: Dockerfile
       args:
         BACKEND_URL: http://backend:8000
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     environment:
       BACKEND_URL: http://backend:8000
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     ports:
       - "3000:3000"
     depends_on:

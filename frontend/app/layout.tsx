@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
 
+import { RouteProgressBar } from "@/components/ui/RouteProgressBar";
+import { ToastContainer } from "@/components/ui/Toast";
+import { AppProviders } from "@/lib/auth";
 import { APP_NAME } from "@/lib/constants";
 
 import "./globals.css";
@@ -22,7 +25,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={inter.variable}>
       <body className="min-h-screen bg-bg font-sans text-text antialiased">
-        {children}
+        <AppProviders>
+          <RouteProgressBar />
+          {children}
+          <ToastContainer />
+        </AppProviders>
       </body>
     </html>
   );

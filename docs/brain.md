@@ -7,9 +7,9 @@ Read order each session: `brain.md` → `rules.md` → `architecture.md` → `de
 
 ## 1. Status (edit me)
 
-- Current milestone: **M7 (complete — starting M8)**
+- Current milestone: **M8 (complete — starting M9)**
 - Last updated: 2026-11-26
-- Last full test run: pass (36/36 backend pytest, 91% coverage on fresh PostgreSQL)
+- Last full test run: pass (36/36 backend pytest, 91% cov; frontend `next build`, `tsc --noEmit`, `next lint` 0 errors, public routes & 404/redirects verified)
 - Blockers: none
 
 ## 2. Project summary
@@ -96,9 +96,9 @@ Do the milestones in order. Each has a "Done when". Do not start the next until 
 - **Done when:** `pytest` is green from a fresh DB and the checklist in §6 is satisfied for all backend items.
 
 ### M8 — Frontend foundation and public site
-- [ ] Tokens, base components (design.md §2–3), layouts (public header/footer, app header/footer)
-- [ ] `lib/api.ts`, auth context, middleware redirects
-- [ ] Landing, About, FAQ, Login (with Back), Signup, Google button, 404, 403, error boundary, BrandLoader, route progress bar
+- [x] Tokens, base components (design.md §2–3), layouts (public header/footer, app header/footer)
+- [x] `lib/api.ts`, auth context, middleware redirects
+- [x] Landing, About, FAQ, Login (with Back), Signup, Google button, 404, 403, error boundary, BrandLoader, route progress bar
 - **Done when:** public pages match design.md; logged-in users are redirected away from public pages; 404 works for unknown routes.
 
 ### M9 — Frontend app
@@ -160,3 +160,4 @@ Detection is rule + small-model based and not perfect → mandatory human review
 - 2026-11-26 — M5 — Added Gemini & Groq LLM providers, A06 fault-tolerant router (retries, backoff, Retry-After, circuit breaker, output validation + repair retry, provider fallback, semaphore), idempotent send + retry + local re-hydration + TXT/DOCX export, scripts/smoke_llm.py, and M5 tests (31/31 passed).
 - 2026-11-26 — M6 — Added doctor dashboard, documents_query service, user & admin complaints workflow, admin user management (restrict/restore/role + escalation guards + vault wipe), SQL aggregate analytics, and M6 tests (34/34 passed).
 - 2026-11-26 — M7 — Added Gemini/Groq HTTP provider tests, session revocation/audit filter/expired-retry hardening tests, completed P1-P9 & S1-S13 audit, updated README.md draft, verified 36/36 tests passing with 91% coverage on fresh PostgreSQL.
+- 2026-11-26 — M8 — Built frontend foundation (lib/api.ts, auth context, formatters, middleware redirects, base UI components, BrandLoader, RouteProgressBar, PublicLayout, AppLayout) and public/auth/error pages (Landing, About, FAQ, Login, Signup, Google button, 404, 403, error boundary); verified next build, tsc, lint, and live routes.
