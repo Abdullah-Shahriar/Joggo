@@ -52,7 +52,7 @@ export function Button({
           <path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       )}
-      <span>{children}</span>
+      {children}
     </button>
   );
 }

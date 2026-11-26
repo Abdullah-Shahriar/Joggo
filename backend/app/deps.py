@@ -59,8 +59,17 @@ def verify_csrf(request: Request) -> None:
     settings = get_settings()
     expected_origin = settings.FRONTEND_ORIGIN.rstrip("/")
     origin = (request.headers.get("origin") or "").rstrip("/")
-    if not origin or origin != expected_origin:
-        raise AppError(ErrorCode.CSRF_REJECTED, 403, "Request origin is not allowed.")
+    if origin:
+        if origin != expected_origin:
+            raise AppError(ErrorCode.CSRF_REJECTED, 403, "Request origin is not allowed.")
+        return
+
+    # Some browsers/proxies omit Origin on same-origin bodyless DELETE requests; allow matching Referer.
+    referer = (request.headers.get("referer") or "").strip()
+    if referer and (referer == expected_origin or referer.startswith(f"{expected_origin}/")):
+        return
+
+    raise AppError(ErrorCode.CSRF_REJECTED, 403, "Request origin is not allowed.")
 
 
 def get_current_auth(

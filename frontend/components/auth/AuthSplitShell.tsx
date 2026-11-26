@@ -9,18 +9,18 @@ import { Logo } from "@/components/ui/Logo";
 const TRUST_SIGNALS = [
   {
     icon: ShieldCheck,
-    title: "Local HIPAA-18 scrubbing",
-    detail: "Names, dates, phone numbers, MRNs, and metadata are tokenized before any AI request.",
+    title: "Automatic privacy protection",
+    detail: "Names, dates, phone numbers, and record IDs are hidden before anything reaches an AI assistant.",
   },
   {
     icon: Lock,
-    title: "Temporary encrypted memory",
-    detail: "Real patient details remain in an AES-256-GCM session vault and wipe on sign out.",
+    title: "Temporary private memory",
+    detail: "Real patient details stay only in locked session memory and clear automatically when you sign out.",
   },
   {
     icon: FileCheck2,
-    title: "Clinician approval & audit trail",
-    detail: "Nothing sends automatically. Every action is logged in a hash-chained audit record.",
+    title: "Doctor review & activity history",
+    detail: "Nothing sends automatically. Every step is logged in a permanent, tamper-protected activity record.",
   },
 ];
 
@@ -103,8 +103,8 @@ export function AuthSplitShell({ children }: { children: ReactNode }) {
               Built for clinical confidentiality.
             </h2>
             <p className="mt-2.5 text-[15px] leading-relaxed text-text-muted">
-              De-identify patient PDFs locally, verify every placeholder, and restore real details
-              only on your screen.
+              Hide personal details from patient files and photos automatically, review every change
+              side-by-side, and restore real names only on your screen.
             </p>
 
             <ul className="mt-8 space-y-4">

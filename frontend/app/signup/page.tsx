@@ -84,7 +84,7 @@ export default function SignupPage() {
       <div className="rounded border border-border bg-bg p-6 sm:p-8">
         <h1 className="text-2xl font-semibold text-text">Create an account</h1>
         <p className="mt-1.5 text-[15px] text-text-muted">
-          Set up your clinician account to start testing with synthetic patient PDFs.
+          Set up your account to start testing with sample patient documents and photos.
         </p>
 
         {formError && (

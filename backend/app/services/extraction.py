@@ -6,7 +6,7 @@ import time
 import unicodedata
 import xml.etree.ElementTree as ET
 
-from PIL import Image
+from PIL import ExifTags, Image, ImageOps
 import pymupdf
 import pytesseract
 
@@ -48,6 +48,7 @@ SOFTWARE_NAME_IGNORE_LIST: frozenset[str] = frozenset(
         "owner",
         "system",
         "clinicshield",
+        "joggo",
     }
 )
 
@@ -280,3 +281,142 @@ def extract_pdf(
         )
     finally:
         doc.close()
+
+
+def extract_image(
+    image_bytes: bytes,
+    *,
+    ocr_langs: str | None = None,
+    whole_doc_timeout: float = WHOLE_DOC_TIMEOUT_SECONDS,
+) -> ExtractionResult:
+    """Extract text via local OCR and author metadata hints from PNG/JPG images in memory."""
+    settings = get_settings()
+    langs = ocr_langs or settings.OCR_LANGS
+    start = time.monotonic()
+
+    try:
+        pil_img = Image.open(io.BytesIO(image_bytes))
+        pil_img = ImageOps.exif_transpose(pil_img)
+        if pil_img.mode not in {"RGB", "L"}:
+            pil_img = pil_img.convert("RGB")
+    except Exception as exc:
+        raise ExtractionError(ErrorCode.PDF_CORRUPT, "The uploaded image could not be opened.") from exc
+
+    hints_set: dict[str, None] = {}
+    # PNG text chunks & general info
+    for key in ("Author", "author", "Creator", "creator", "Artist", "artist"):
+        val = pil_img.info.get(key)
+        if isinstance(val, str):
+            cleaned = _clean_hint(val)
+            if cleaned:
+                hints_set[cleaned] = None
+
+    # EXIF Artist / Author tags (JPEG)
+    try:
+        exif = pil_img.getexif()
+        if exif:
+            for tag_id, val in exif.items():
+                tag_name = ExifTags.TAGS.get(tag_id, "")
+                if tag_name in {"Artist", "XPAuthor", "Author"} and isinstance(val, (str, bytes)):
+                    raw_val = val.decode("utf-16le", errors="ignore").rstrip("\x00") if isinstance(val, bytes) else val
+                    cleaned = _clean_hint(raw_val)
+                    if cleaned:
+                        hints_set[cleaned] = None
+    except Exception:
+        pass
+
+    _check_doc_deadline(start, whole_doc_timeout)
+    try:
+        ocr_text = pytesseract.image_to_string(
+            pil_img,
+            lang=langs,
+            timeout=PER_PAGE_OCR_TIMEOUT_SECONDS,
+        ).strip()
+    except RuntimeError as exc:
+        raise ExtractionError(
+            ErrorCode.EXTRACTION_TIMEOUT,
+            "Reading text from this image timed out.",
+        ) from exc
+    except Exception as exc:
+        raise ExtractionError(
+            ErrorCode.OCR_FAILED,
+            "Could not read text from this image.",
+        ) from exc
+
+    normalized = _normalize_text(ocr_text)
+    if len(normalized) < MIN_EXTRACTED_TEXT_CHARS:
+        raise ExtractionError(
+            ErrorCode.EMPTY_DOCUMENT,
+            "No readable text could be found in this image.",
+        )
+
+    return ExtractionResult(
+        text=normalized,
+        page_count=1,
+        metadata_hints=list(hints_set.keys()),
+    )
+
+
+def extract_svg(svg_bytes: bytes) -> ExtractionResult:
+    """Safely parse SVG XML in memory (blocking DOCTYPE/ENTITY) and extract visible text & metadata."""
+    try:
+        svg_text = svg_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ExtractionError(ErrorCode.PDF_CORRUPT, "The uploaded SVG is not valid UTF-8 text.") from exc
+
+    if re.search(r"<!\s*(DOCTYPE|ENTITY)\b", svg_text, re.IGNORECASE):
+        raise ExtractionError(ErrorCode.PDF_CORRUPT, "Unsupported XML declarations in SVG file.")
+
+    try:
+        root = ET.fromstring(svg_text)
+    except ET.ParseError as exc:
+        raise ExtractionError(ErrorCode.PDF_CORRUPT, "The uploaded SVG file is malformed.") from exc
+
+    root_tag = root.tag.split("}")[-1].lower() if "}" in root.tag else root.tag.lower()
+    if root_tag != "svg":
+        raise ExtractionError(ErrorCode.PDF_CORRUPT, "The uploaded file is not a valid SVG document.")
+
+    chunks: list[str] = []
+    hints_set: dict[str, None] = {}
+
+    for elem in root.iter():
+        local_tag = elem.tag.split("}")[-1].lower() if "}" in elem.tag else elem.tag.lower()
+        if local_tag in {"text", "title", "desc"}:
+            piece = " ".join(t.strip() for t in elem.itertext() if t and t.strip()).strip()
+            if piece:
+                chunks.append(piece)
+        elif local_tag == "creator":
+            val = " ".join(t.strip() for t in elem.itertext() if t and t.strip()).strip()
+            cleaned = _clean_hint(val)
+            if cleaned:
+                hints_set[cleaned] = None
+
+    normalized = _normalize_text("\n".join(chunks))
+    if len(normalized) < MIN_EXTRACTED_TEXT_CHARS:
+        raise ExtractionError(
+            ErrorCode.EMPTY_DOCUMENT,
+            "No readable text could be found in this SVG file.",
+        )
+
+    return ExtractionResult(
+        text=normalized,
+        page_count=1,
+        metadata_hints=list(hints_set.keys()),
+    )
+
+
+def extract_document(
+    file_bytes: bytes,
+    *,
+    media_type: str = "application/pdf",
+    ocr_langs: str | None = None,
+    whole_doc_timeout: float = WHOLE_DOC_TIMEOUT_SECONDS,
+) -> ExtractionResult:
+    """Dispatch extraction by validated media type (PDF, PNG, JPEG, or SVG)."""
+    if media_type == "application/pdf":
+        return extract_pdf(file_bytes, ocr_langs=ocr_langs, whole_doc_timeout=whole_doc_timeout)
+    if media_type in {"image/png", "image/jpeg"}:
+        return extract_image(file_bytes, ocr_langs=ocr_langs, whole_doc_timeout=whole_doc_timeout)
+    if media_type == "image/svg+xml":
+        return extract_svg(file_bytes)
+    raise ExtractionError(ErrorCode.NOT_A_PDF, "Supported file types are PDF, PNG, JPG, and SVG.")

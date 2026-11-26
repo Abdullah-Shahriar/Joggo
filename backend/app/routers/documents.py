@@ -1,11 +1,15 @@
 import base64
 from datetime import datetime, timezone
 import hashlib
+import io
 import os
+import re
 from typing import Literal
 import uuid
+import xml.etree.ElementTree as ET
 
 from fastapi import APIRouter, Depends, File, Form, Header, Query, Request, Response, UploadFile
+from PIL import Image
 import pymupdf
 from sqlalchemy import String, asc, cast, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -59,6 +63,15 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 CHUNK_SIZE = 64 * 1024
 PDF_MAGIC = b"%PDF-"
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+JPEG_MAGIC = b"\xff\xd8\xff"
+
+MEDIA_TYPE_TO_EXT: dict[str, str] = {
+    "application/pdf": "pdf",
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/svg+xml": "svg",
+}
 
 STEP_ORDER: dict[str, int] = {
     "EXTRACT": 0,
@@ -93,30 +106,76 @@ def _read_upload_bounded(upload: UploadFile, max_bytes: int) -> bytes:
     return bytes(buf)
 
 
-def _validate_pdf_bytes(pdf_bytes: bytes, max_pages: int) -> int:
-    if len(pdf_bytes) < len(PDF_MAGIC) or not pdf_bytes.startswith(PDF_MAGIC):
-        raise AppError(ErrorCode.NOT_A_PDF, 415, "Only PDF files are supported.")
+def _looks_like_svg(raw_bytes: bytes) -> bool:
+    head = raw_bytes[:1024].lstrip(b"\xef\xbb\xbf \t\r\n")
+    lower = head.lower()
+    if lower.startswith(b"<svg"):
+        return True
+    if lower.startswith(b"<?xml") and b"<svg" in lower:
+        return True
+    return False
 
-    try:
-        doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
-    except Exception as exc:
-        raise AppError(ErrorCode.PDF_CORRUPT, 422, "The uploaded PDF appears to be corrupt.") from exc
 
-    try:
-        if doc.is_encrypted or doc.needs_pass:
-            raise AppError(ErrorCode.PDF_ENCRYPTED, 422, "Password-protected PDFs are not supported.")
-        page_count = doc.page_count
-        if page_count < 1:
-            raise AppError(ErrorCode.PDF_CORRUPT, 422, "The uploaded PDF contains no pages.")
-        if page_count > max_pages:
-            raise AppError(
-                ErrorCode.TOO_MANY_PAGES,
-                422,
-                f"PDF has {page_count} pages; maximum allowed is {max_pages}.",
-            )
-        return page_count
-    finally:
-        doc.close()
+def _validate_upload_bytes(file_bytes: bytes, max_pages: int) -> tuple[str, int]:
+    """Validate uploaded PDF, PNG, JPG, or SVG bytes by magic header & structure."""
+    if file_bytes.startswith(PDF_MAGIC):
+        try:
+            doc = pymupdf.open(stream=file_bytes, filetype="pdf")
+        except Exception as exc:
+            raise AppError(ErrorCode.PDF_CORRUPT, 422, "The uploaded PDF appears to be corrupt.") from exc
+
+        try:
+            if doc.is_encrypted or doc.needs_pass:
+                raise AppError(ErrorCode.PDF_ENCRYPTED, 422, "Password-protected PDFs are not supported.")
+            page_count = doc.page_count
+            if page_count < 1:
+                raise AppError(ErrorCode.PDF_CORRUPT, 422, "The uploaded PDF contains no pages.")
+            if page_count > max_pages:
+                raise AppError(
+                    ErrorCode.TOO_MANY_PAGES,
+                    422,
+                    f"PDF has {page_count} pages; maximum allowed is {max_pages}.",
+                )
+            return "application/pdf", page_count
+        finally:
+            doc.close()
+
+    if file_bytes.startswith(PNG_MAGIC) or file_bytes.startswith(JPEG_MAGIC):
+        expected_media = "image/png" if file_bytes.startswith(PNG_MAGIC) else "image/jpeg"
+        try:
+            with Image.open(io.BytesIO(file_bytes)) as img:
+                img.verify()
+            with Image.open(io.BytesIO(file_bytes)) as img:
+                width, height = img.size
+                if width < 1 or height < 1 or (width * height) > 50_000_000:
+                    raise AppError(ErrorCode.PDF_CORRUPT, 422, "The uploaded image dimensions are invalid.")
+        except AppError:
+            raise
+        except Exception as exc:
+            raise AppError(ErrorCode.PDF_CORRUPT, 422, "The uploaded image appears to be corrupt.") from exc
+        return expected_media, 1
+
+    if _looks_like_svg(file_bytes):
+        try:
+            svg_text = file_bytes.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise AppError(ErrorCode.PDF_CORRUPT, 422, "The uploaded SVG file is not valid UTF-8.") from exc
+        if re.search(r"<!\s*(DOCTYPE|ENTITY)\b", svg_text, re.IGNORECASE):
+            raise AppError(ErrorCode.PDF_CORRUPT, 422, "Unsupported XML declarations in SVG file.")
+        try:
+            root = ET.fromstring(svg_text)
+        except ET.ParseError as exc:
+            raise AppError(ErrorCode.PDF_CORRUPT, 422, "The uploaded SVG appears to be corrupt.") from exc
+        root_tag = root.tag.split("}")[-1].lower() if "}" in root.tag else root.tag.lower()
+        if root_tag != "svg":
+            raise AppError(ErrorCode.PDF_CORRUPT, 422, "The uploaded file is not a valid SVG.")
+        return "image/svg+xml", 1
+
+    raise AppError(
+        ErrorCode.NOT_A_PDF,
+        415,
+        "Only PDF, PNG, JPG, and SVG files are supported.",
+    )
 
 
 def _serialize_detail(db: Session, doc: Document, *, vault_sanitized_text: str | None = None) -> DocumentDetailResponse:
@@ -227,9 +286,9 @@ def upload_document(
     max_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
     ip = get_client_ip(request)
 
-    pdf_bytes = _read_upload_bounded(file, max_bytes)
-    page_count = _validate_pdf_bytes(pdf_bytes, settings.MAX_PDF_PAGES)
-    file_sha256 = hashlib.sha256(pdf_bytes).hexdigest()
+    file_bytes = _read_upload_bounded(file, max_bytes)
+    media_type, page_count = _validate_upload_bytes(file_bytes, settings.MAX_PDF_PAGES)
+    file_sha256 = hashlib.sha256(file_bytes).hexdigest()
 
     existing = db.execute(
         select(Document.id).where(
@@ -259,7 +318,7 @@ def upload_document(
         owner_id=auth.user.id,
         original_filename=_sanitize_filename(file.filename),
         file_sha256=file_sha256,
-        size_bytes=len(pdf_bytes),
+        size_bytes=len(file_bytes),
         page_count=page_count,
         task_type=task_type,
         status=DocumentStatus.UPLOADED,
@@ -313,7 +372,8 @@ def upload_document(
         metadata={
             "task_type": task_type.value,
             "page_count": page_count,
-            "size_bytes": len(pdf_bytes),
+            "size_bytes": len(file_bytes),
+            "media_type": media_type,
         },
     )
     db.commit()
@@ -322,7 +382,8 @@ def upload_document(
         auth.session_family_id,
         doc.id,
         {
-            "original_pdf_b64": base64.b64encode(pdf_bytes).decode("ascii"),
+            "original_pdf_b64": base64.b64encode(file_bytes).decode("ascii"),
+            "original_media_type": media_type,
             "original_text": None,
             "sanitized_text": None,
             "mapping": {},
@@ -410,11 +471,16 @@ def get_original_pdf(
     vault_data = vault.get(auth.session_family_id, doc.id)
     if vault_data is None or not vault_data.get("original_pdf_b64"):
         raise AppError(ErrorCode.VAULT_EXPIRED, 409, "Session data expired. Upload the file again.")
-    pdf_bytes = base64.b64decode(vault_data["original_pdf_b64"])
+    raw_bytes = base64.b64decode(vault_data["original_pdf_b64"])
+    media_type = str(vault_data.get("original_media_type") or "application/pdf")
+    ext = MEDIA_TYPE_TO_EXT.get(media_type, "pdf")
+    headers = {"Content-Disposition": f'inline; filename="original.{ext}"'}
+    if media_type == "image/svg+xml":
+        headers["Content-Security-Policy"] = "sandbox"
     return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": 'inline; filename="original.pdf"'},
+        content=raw_bytes,
+        media_type=media_type,
+        headers=headers,
     )
 
 

@@ -8,6 +8,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BrandLoader } from "@/components/ui/BrandLoader";
 import { ForbiddenView } from "@/components/ui/ForbiddenView";
 import { Logo } from "@/components/ui/Logo";
+import { Footer } from "@/components/ui/modem-animated-footer";
 import { useAuth } from "@/lib/auth";
 import { APP_NAME, getRoleHome, type UserRole } from "@/lib/constants";
 
@@ -36,9 +37,13 @@ const ROLE_MENUS: Record<UserRole, NavItem[]> = {
 export function AppLayout({
   children,
   allowedRoles,
+  preFooter,
+  bottomPaddingClass = "",
 }: {
   children: ReactNode;
   allowedRoles?: UserRole[];
+  preFooter?: ReactNode;
+  bottomPaddingClass?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -77,7 +82,12 @@ export function AppLayout({
   const isAllowed = !allowedRoles || allowedRoles.includes(user.role);
   const navItems = ROLE_MENUS[user.role];
   const roleHome = getRoleHome(user.role);
-  const year = new Date().getFullYear();
+
+  const footerQuickLinks = [
+    ...navItems.map((item) => ({ label: item.label, href: item.href })),
+    ...(user.role === "auditor" ? [{ label: "Help", href: "/help" }] : []),
+    { label: "Profile", href: "/profile" },
+  ];
 
   const handleSignOut = async () => {
     setProfileOpen(false);
@@ -86,7 +96,7 @@ export function AppLayout({
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-bg text-text">
+    <div className={`flex min-h-screen flex-col bg-bg text-text ${bottomPaddingClass}`}>
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:text-white"
@@ -228,23 +238,25 @@ export function AppLayout({
         {isAllowed ? children : <ForbiddenView />}
       </main>
 
-      <footer className="border-t border-border bg-bg py-3">
-        <div className="mx-auto flex max-w-app flex-wrap items-center justify-between gap-2 px-4 text-xs text-text-muted sm:px-6">
-          <span>Demo environment — use synthetic data only</span>
-          <span className="inline-flex items-center gap-1.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.png"
-              alt=""
-              aria-hidden="true"
-              className="h-4 w-auto object-contain"
-            />
-            <span>
-              © {year} {APP_NAME}
-            </span>
-          </span>
-        </div>
-      </footer>
+      {isAllowed && preFooter ? (
+        <div className="mt-6 w-full border-t border-border bg-bg-subtle/70">{preFooter}</div>
+      ) : null}
+
+      <Footer
+        brandName={APP_NAME}
+        brandDescription="Privacy-first AI for medical documents. Hide personal details before any AI request."
+        navLinks={footerQuickLinks}
+        rightNotice="Demo environment — use synthetic data only"
+        brandIconContainerClassName="bg-gradient-to-br from-bg to-accent-tint border border-border/80"
+        brandIcon={
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src="/logo.png"
+            alt={`${APP_NAME} logo`}
+            className="h-9 sm:h-12 md:h-16 w-auto object-contain drop-shadow-sm"
+          />
+        }
+      />
     </div>
   );
 }

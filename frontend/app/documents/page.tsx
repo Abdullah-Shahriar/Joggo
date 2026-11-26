@@ -57,6 +57,9 @@ function DocumentsListContent() {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
+    onError: () => {
+      setDeleteTarget(null);
+    },
   });
 
   const toggleSort = (col: SortKey) => {
@@ -167,7 +170,7 @@ function DocumentsListContent() {
         ) : !data || data.items.length === 0 ? (
           <EmptyState
             message="No documents match your filters."
-            actionLabel="Upload a PDF"
+            actionLabel="Upload a document or photo"
             actionHref="/documents/new"
           />
         ) : (
@@ -201,7 +204,7 @@ function DocumentsListContent() {
                         onClick={() => toggleSort("entity_count")}
                         className="inline-flex items-center gap-1 hover:text-text"
                       >
-                        Entities <ArrowUpDown className="h-3 w-3" />
+                        Hidden details <ArrowUpDown className="h-3 w-3" />
                       </button>
                     </th>
                     <th className="px-3 py-2.5">
@@ -235,14 +238,17 @@ function DocumentsListContent() {
                         onClick={(e) => e.stopPropagation()}
                       >
                         <Button
-                          variant="ghost"
+                          variant="destructive"
                           size="sm"
+                          title={`Delete ${doc.original_filename}`}
                           aria-label={`Delete ${doc.original_filename}`}
-                          onClick={() =>
-                            setDeleteTarget({ id: doc.id, name: doc.original_filename })
-                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteTarget({ id: doc.id, name: doc.original_filename });
+                          }}
                         >
-                          <Trash2 className="h-4 w-4 text-danger" />
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          <span>Delete</span>
                         </Button>
                       </td>
                     </tr>

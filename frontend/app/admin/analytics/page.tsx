@@ -23,6 +23,24 @@ function BarRow({ label, count, max }: { label: string; count: number; max: numb
   );
 }
 
+function AdminActivityBand() {
+  const { data } = useQuery<AdminAnalyticsResponse>({
+    queryKey: ["admin", "analytics"],
+    queryFn: () => apiRequest<AdminAnalyticsResponse>("/admin/analytics"),
+  });
+
+  if (!data?.activity_heatmap) return null;
+
+  return (
+    <ActivityHeatmap
+      fullWidth
+      data={data.activity_heatmap}
+      title="Platform activity"
+      subtitle="Daily uploads, reviews, written drafts, and support activity across the last 13 weeks."
+    />
+  );
+}
+
 function AdminAnalyticsContent() {
   const { data, isLoading, isError, refetch } = useQuery<AdminAnalyticsResponse>({
     queryKey: ["admin", "analytics"],
@@ -61,35 +79,30 @@ function AdminAnalyticsContent() {
       <div>
         <h1 className="text-[28px] font-semibold text-text">Analytics</h1>
         <p className="mt-1.5 text-[15px] text-text-muted">
-          Aggregate operational metrics only. No document content or filenames are included.
+          General usage numbers only. Document contents and filenames are never shown to
+          administrators.
         </p>
       </div>
 
       {/* Headline metrics row */}
-      <dl className="grid grid-cols-1 gap-6 border-t border-border py-5 sm:grid-cols-3">
+      <dl className="grid grid-cols-1 gap-6 border-y border-border py-5 sm:grid-cols-3">
         <div>
-          <dt className="text-xs text-text-muted">Safety block rate</dt>
+          <dt className="text-xs text-text-muted">Safety hold rate</dt>
           <dd className="mt-1 text-xl font-semibold text-text">
             {(data.safety_block_rate * 100).toFixed(1)}%
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-text-muted">LLM fallbacks</dt>
+          <dt className="text-xs text-text-muted">Backup AI switches</dt>
           <dd className="mt-1 text-xl font-semibold text-text">{data.llm_fallback_count}</dd>
         </div>
         <div>
-          <dt className="text-xs text-text-muted">Average LLM latency</dt>
+          <dt className="text-xs text-text-muted">Average AI response time</dt>
           <dd className="mt-1 text-xl font-semibold text-text">
             {data.avg_llm_latency_ms !== null ? `${Math.round(data.avg_llm_latency_ms)} ms` : "—"}
           </dd>
         </div>
       </dl>
-
-      <ActivityHeatmap
-        data={data.activity_heatmap}
-        title="Platform activity"
-        subtitle="Aggregate daily uploads, reviews, generated drafts, and support activity across the last 13 weeks."
-      />
 
       {/* Users by role & status */}
       <section className="grid grid-cols-1 gap-10 lg:grid-cols-2">
@@ -128,14 +141,14 @@ function AdminAnalyticsContent() {
         </table>
       </section>
 
-      {/* LLM providers & Complaints */}
+      {/* AI providers & Complaints */}
       <section className="grid grid-cols-1 gap-10 lg:grid-cols-2">
         <div>
-          <h2 className="mb-3 text-lg font-semibold text-text">LLM provider usage</h2>
+          <h2 className="mb-3 text-lg font-semibold text-text">AI writing service usage</h2>
           {Object.keys(data.llm_provider_usage).length === 0 ? (
-            <p className="text-sm text-text-muted">No completed AI generations yet.</p>
+            <p className="text-sm text-text-muted">No completed drafts yet.</p>
           ) : (
-            <table aria-label="LLM provider usage" className="w-full border-collapse">
+            <table aria-label="AI writing service usage" className="w-full border-collapse">
               <tbody>
                 {Object.entries(data.llm_provider_usage).map(([prov, count]) => (
                   <BarRow key={prov} label={prov} count={count} max={maxProvider} />
@@ -146,11 +159,11 @@ function AdminAnalyticsContent() {
         </div>
 
         <div>
-          <h2 className="mb-3 text-lg font-semibold text-text">Complaints by status</h2>
+          <h2 className="mb-3 text-lg font-semibold text-text">Support tickets by status</h2>
           {Object.keys(data.complaints_by_status).length === 0 ? (
-            <p className="text-sm text-text-muted">No complaints recorded.</p>
+            <p className="text-sm text-text-muted">No support tickets recorded.</p>
           ) : (
-            <table aria-label="Complaints by status" className="w-full border-collapse">
+            <table aria-label="Support tickets by status" className="w-full border-collapse">
               <tbody>
                 {Object.entries(data.complaints_by_status).map(([st, count]) => (
                   <BarRow
@@ -166,13 +179,13 @@ function AdminAnalyticsContent() {
         </div>
       </section>
 
-      {/* Entity type totals */}
+      {/* Hidden details totals */}
       <section>
-        <h2 className="mb-3 text-lg font-semibold text-text">Entity type totals</h2>
+        <h2 className="mb-3 text-lg font-semibold text-text">Hidden detail categories</h2>
         {data.entity_type_totals.length === 0 ? (
-          <p className="text-sm text-text-muted">No detected entities recorded yet.</p>
+          <p className="text-sm text-text-muted">No hidden personal details recorded yet.</p>
         ) : (
-          <table aria-label="Entity type totals" className="w-full border-collapse">
+          <table aria-label="Hidden detail categories" className="w-full border-collapse">
             <tbody>
               {data.entity_type_totals.map((row) => (
                 <BarRow key={row.entity_type} label={row.entity_type} count={row.count} max={maxEntity} />
@@ -187,7 +200,7 @@ function AdminAnalyticsContent() {
 
 export default function AdminAnalyticsPage() {
   return (
-    <AppLayout allowedRoles={["admin"]}>
+    <AppLayout allowedRoles={["admin"]} preFooter={<AdminActivityBand />}>
       <AdminAnalyticsContent />
     </AppLayout>
   );

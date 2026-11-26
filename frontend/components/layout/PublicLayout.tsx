@@ -142,7 +142,7 @@ export function PublicLayout({
 
       <Footer
         brandName={APP_NAME}
-        brandDescription="Privacy-first AI for clinical documents. De-identify patient PDFs locally before any AI request."
+        brandDescription="Privacy-first AI for medical documents. Hide personal details before any AI request."
         navLinks={FOOTER_NAV_LINKS}
         rightNotice="Demo environment — use synthetic data only"
         brandIconContainerClassName="bg-gradient-to-br from-bg to-accent-tint border border-border/80"

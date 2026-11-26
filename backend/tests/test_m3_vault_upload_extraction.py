@@ -378,3 +378,98 @@ def test_concurrent_duplicate_upload_creates_exactly_one_document(app: FastAPI) 
         assert dup_body["error"]["code"] == "DUPLICATE_DOCUMENT"
     finally:
         c.__exit__(None, None, None)
+
+
+def test_png_jpg_svg_uploads_and_document_delete_including_referer_csrf(app: FastAPI) -> None:
+    from PIL import Image, ImageDraw
+
+    c, _user = _create_and_login(app, role=UserRole.doctor)
+    try:
+        # Build a clean synthetic clinical note image for PNG and JPEG OCR
+        img = Image.new("RGB", (1100, 320), "white")
+        draw = ImageDraw.Draw(img)
+        draw.text((40, 40), "Patient Name: Nadia Islam", fill="black")
+        draw.text((40, 100), "Phone: 01911223344", fill="black")
+        draw.text((40, 160), "Assessment: Stable recovery, continue daily medication.", fill="black")
+
+        png_buf = io.BytesIO()
+        img.save(png_buf, format="PNG")
+        png_bytes = png_buf.getvalue()
+
+        jpg_buf = io.BytesIO()
+        img.save(jpg_buf, format="JPEG", quality=95)
+        jpg_bytes = jpg_buf.getvalue()
+
+        svg_bytes = (
+            b'<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200">'
+            b'<text x="20" y="40">Patient Name: Karim Uddin</text>'
+            b'<text x="20" y="80">Phone: 01755667788</text>'
+            b'<text x="20" y="120">Follow-up visit planned in two weeks for blood pressure check.</text>'
+            b"</svg>"
+        )
+
+        # 1. PNG upload succeeds & previews with image/png
+        r_png = c.post(
+            "/api/documents",
+            files={"file": ("note.png", png_bytes, "image/png")},
+            data={"task_type": "case_summary"},
+            headers=CSRF_HEADERS,
+        )
+        assert r_png.status_code == 202
+        png_id = r_png.json()["id"]
+        png_detail = _wait_for_extract_done(c, png_id)
+        assert png_detail["status"] in {"REVIEW_REQUIRED", "BLOCKED"}
+        prev_png = c.get(f"/api/documents/{png_id}/original-pdf")
+        assert prev_png.status_code == 200
+        assert prev_png.headers["content-type"].startswith("image/png")
+
+        # 2. JPG upload succeeds
+        r_jpg = c.post(
+            "/api/documents",
+            files={"file": ("photo.jpg", jpg_bytes, "image/jpeg")},
+            data={"task_type": "discharge_summary"},
+            headers=CSRF_HEADERS,
+        )
+        assert r_jpg.status_code == 202
+        jpg_id = r_jpg.json()["id"]
+        jpg_detail = _wait_for_extract_done(c, jpg_id)
+        assert jpg_detail["status"] in {"REVIEW_REQUIRED", "BLOCKED"}
+
+        # 3. SVG upload succeeds & XXE DOCTYPE SVG is rejected
+        r_svg = c.post(
+            "/api/documents",
+            files={"file": ("chart.svg", svg_bytes, "image/svg+xml")},
+            data={"task_type": "treatment_plan"},
+            headers=CSRF_HEADERS,
+        )
+        assert r_svg.status_code == 202
+        svg_id = r_svg.json()["id"]
+        svg_detail = _wait_for_extract_done(c, svg_id)
+        assert svg_detail["status"] in {"REVIEW_REQUIRED", "BLOCKED"}
+        prev_svg = c.get(f"/api/documents/{svg_id}/original-pdf")
+        assert prev_svg.status_code == 200
+        assert prev_svg.headers["content-type"].startswith("image/svg+xml")
+        assert prev_svg.headers.get("content-security-policy") == "sandbox"
+
+        xxe_svg = b'<!DOCTYPE svg [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><svg><text>&xxe;</text></svg>'
+        r_xxe = c.post(
+            "/api/documents",
+            files={"file": ("bad.svg", xxe_svg, "image/svg+xml")},
+            data={"task_type": "case_summary"},
+            headers=CSRF_HEADERS,
+        )
+        assert r_xxe.status_code in {415, 422}
+
+        # 4. Delete document works with Origin AND with Referer-only (no Origin)
+        r_del_origin = c.delete(f"/api/documents/{png_id}", headers=CSRF_HEADERS)
+        assert r_del_origin.status_code == 200
+        assert c.get(f"/api/documents/{png_id}").status_code == 404
+
+        r_del_referer = c.delete(
+            f"/api/documents/{svg_id}",
+            headers={"X-Requested-With": "fetch", "Referer": "http://localhost:3000/documents"},
+        )
+        assert r_del_referer.status_code == 200
+        assert c.get(f"/api/documents/{svg_id}").status_code == 404
+    finally:
+        c.__exit__(None, None, None)

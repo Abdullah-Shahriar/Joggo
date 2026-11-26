@@ -18,7 +18,7 @@ from app.models.step import PipelineStep, PipelineStepName, PipelineStepStatus
 from app.services import audit
 from app.services.detection.base import MANUAL_MARK_TYPES, TOKEN_PATTERN_RE, Span
 from app.services.detection.resolve import run_detection
-from app.services.extraction import ExtractionError, extract_pdf
+from app.services.extraction import ExtractionError, extract_document
 from app.services.llm.router import LLMRouterError, route_generate
 from app.services.safety import run_safety_scan
 from app.services.state import transition
@@ -244,7 +244,8 @@ def run_document_pipeline(doc_id: uuid.UUID, session_family_id: uuid.UUID) -> No
                 )
                 return
             try:
-                extracted = extract_pdf(base64.b64decode(pdf_b64))
+                media_type = str(vault_data.get("original_media_type") or "application/pdf")
+                extracted = extract_document(base64.b64decode(pdf_b64), media_type=media_type)
             except ExtractionError as exc:
                 _mark_step_failed(db, doc_id, extract_step, error_code=exc.code.value, error_message=exc.message)
                 return
@@ -255,7 +256,7 @@ def run_document_pipeline(doc_id: uuid.UUID, session_family_id: uuid.UUID) -> No
                     doc_id,
                     extract_step,
                     error_code=ErrorCode.OCR_FAILED.value,
-                    error_message="Failed to extract text from the PDF.",
+                    error_message="Failed to extract text from the uploaded file.",
                 )
                 return
 

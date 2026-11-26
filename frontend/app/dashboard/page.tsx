@@ -13,6 +13,24 @@ import { useAuth } from "@/lib/auth";
 import { formatDateTime, formatTaskType } from "@/lib/format";
 import type { DashboardResponse } from "@/lib/types";
 
+function DashboardActivityBand() {
+  const { data } = useQuery<DashboardResponse>({
+    queryKey: ["dashboard"],
+    queryFn: () => apiRequest<DashboardResponse>("/dashboard"),
+  });
+
+  if (!data?.activity_heatmap) return null;
+
+  return (
+    <ActivityHeatmap
+      fullWidth
+      data={data.activity_heatmap}
+      title="Your activity"
+      subtitle="Daily uploads, reviews, written drafts, and help messages across the last 13 weeks."
+    />
+  );
+}
+
 function DashboardContent() {
   const { user } = useAuth();
   const isRestricted = user?.status === "restricted";
@@ -58,35 +76,27 @@ function DashboardContent() {
         )}
       </div>
 
-      {/* Plain row of three figures (no card grid, design.md §5) */}
-      <dl className="mt-8 grid grid-cols-1 gap-6 border-t border-border py-6 sm:grid-cols-3">
+      {/* Plain row of three figures */}
+      <dl className="mt-8 grid grid-cols-1 gap-6 border-y border-border py-6 sm:grid-cols-3">
         <div>
-          <dt className="text-xs text-text-muted">Processed this week</dt>
+          <dt className="text-xs text-text-muted">Completed this week</dt>
           <dd className="mt-1 text-2xl font-semibold text-text">
             {isLoading ? "—" : (data?.processed_last_7_days ?? 0)}
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-text-muted">Waiting for review</dt>
+          <dt className="text-xs text-text-muted">Waiting for your review</dt>
           <dd className="mt-1 text-2xl font-semibold text-text">
             {isLoading ? "—" : (data?.waiting_for_review ?? 0)}
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-text-muted">Blocked</dt>
+          <dt className="text-xs text-text-muted">Needs attention</dt>
           <dd className="mt-1 text-2xl font-semibold text-text">
             {isLoading ? "—" : (data?.blocked_count ?? 0)}
           </dd>
         </div>
       </dl>
-
-      {data?.activity_heatmap && (
-        <ActivityHeatmap
-          data={data.activity_heatmap}
-          title="Your activity"
-          subtitle="Daily uploads, review marks, generated drafts, and help replies across the last 13 weeks."
-        />
-      )}
 
       <section className="mt-10">
         <div className="mb-4 flex items-center justify-between">
@@ -107,7 +117,7 @@ function DashboardContent() {
           </div>
         ) : !data || data.recent_documents.length === 0 ? (
           <EmptyState
-            message="No documents yet. Upload a PDF to begin."
+            message="No documents yet. Upload a PDF, image, or take a photo to begin."
             actionLabel={isRestricted ? undefined : "New document"}
             actionHref={isRestricted ? undefined : "/documents/new"}
           />
@@ -117,7 +127,7 @@ function DashboardContent() {
               <thead>
                 <tr className="border-y border-border bg-bg-subtle text-xs font-medium text-text-muted">
                   <th className="px-3 py-2.5">Document</th>
-                  <th className="px-3 py-2.5">Task</th>
+                  <th className="px-3 py-2.5">Summary type</th>
                   <th className="px-3 py-2.5">Status</th>
                   <th className="px-3 py-2.5">Date</th>
                 </tr>
@@ -148,7 +158,7 @@ function DashboardContent() {
 
 export default function DashboardPage() {
   return (
-    <AppLayout allowedRoles={["doctor"]}>
+    <AppLayout allowedRoles={["doctor"]} preFooter={<DashboardActivityBand />}>
       <DashboardContent />
     </AppLayout>
   );

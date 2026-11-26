@@ -1,19 +1,20 @@
 import Link from "next/link";
 
 import { PublicLayout } from "@/components/layout/PublicLayout";
+import { APP_NAME } from "@/lib/constants";
 
 const STEPS = [
-  "Upload a patient PDF.",
-  "Identities are found and replaced with safe placeholders.",
-  "You review the cleaned text, then approve.",
-  "The AI writes the draft; real details are restored only on your screen.",
+  "Upload a patient PDF, image (PNG, JPG, SVG), or take a photo with your camera.",
+  "Personal details like names, phone numbers, and dates are automatically replaced with safe labels.",
+  "You review the cleaned page side-by-side with the original and approve it.",
+  "The writing assistant prepares your clinical draft, and real details are restored only on your screen.",
 ];
 
 const SAFETY_POINTS = [
-  "Identifiers never leave our server.",
-  "Dates become relative days; birthdates become age.",
-  "Real details are kept only in temporary memory and wiped when you sign out.",
-  "Every action is recorded in a tamper-evident audit log.",
+  "Patient names, phone numbers, and addresses are never sent to outside AI services.",
+  "Dates are turned into day counts (such as Day 0 and Day 3), and birthdates become age.",
+  "Real details stay only in temporary private memory and clear automatically when you sign out.",
+  "Every important action is recorded in a permanent activity history that cannot be altered.",
 ];
 
 export default function LandingPage() {
@@ -26,9 +27,9 @@ export default function LandingPage() {
             <h1 className="text-[34px] font-semibold leading-tight tracking-tight text-text sm:text-[44px]">
               Use AI on patient records. Without exposing patients.
             </h1>
-            <p className="mt-4 max-w-xl text-base text-text-muted">
-              We remove identities locally before anything reaches an AI model, then restore them on
-              your screen.
+            <p className="mt-4 max-w-xl text-base leading-relaxed text-text-muted">
+              {APP_NAME} hides personal details before anything reaches an AI writing assistant,
+              then puts the real details back only on your screen.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
@@ -89,7 +90,7 @@ export default function LandingPage() {
           <h2 className="text-xl font-semibold text-text">How it works</h2>
           <ol className="mt-6 space-y-4">
             {STEPS.map((step, idx) => (
-              <li key={step} className="flex items-start gap-4 text-base text-text">
+              <li key={step} className="flex items-start gap-4 text-[15px] leading-relaxed text-text">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-accent-tint text-xs font-semibold text-accent">
                   {idx + 1}
                 </span>
@@ -104,7 +105,7 @@ export default function LandingPage() {
       <section className="bg-bg py-16">
         <div className="mx-auto max-w-prose px-4 sm:px-6">
           <h2 className="text-xl font-semibold text-text">Why it is safe</h2>
-          <ul className="mt-6 space-y-3 text-base text-text">
+          <ul className="mt-6 space-y-3 text-[15px] leading-relaxed text-text">
             {SAFETY_POINTS.map((point) => (
               <li key={point} className="flex items-start gap-3">
                 <span aria-hidden="true" className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
@@ -118,9 +119,9 @@ export default function LandingPage() {
       {/* Band 4: Final CTA (bg-subtle) */}
       <section className="border-t border-border bg-bg-subtle py-16">
         <div className="mx-auto max-w-prose px-4 text-center sm:px-6">
-          <h2 className="text-xl font-semibold text-text">Try it with synthetic data</h2>
-          <p className="mt-2 text-sm text-text-muted">
-            Sign in with a demo account or create one to test the full de-identification workflow.
+          <h2 className="text-xl font-semibold text-text">Try it with sample records</h2>
+          <p className="mt-2 text-[15px] text-text-muted">
+            Sign in with a demo account or create one to try the full privacy-safe drafting flow.
           </p>
           <div className="mt-6">
             <Link

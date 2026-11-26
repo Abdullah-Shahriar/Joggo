@@ -4,31 +4,36 @@ import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
 import { PublicLayout } from "@/components/layout/PublicLayout";
+import { APP_NAME } from "@/lib/constants";
 
 const FAQ_ITEMS = [
   {
-    q: "Does patient data reach the AI?",
-    a: "No. Only placeholder text such as [PATIENT_A], \"Age 58\" and [DAY_0].",
+    q: "Does real patient information reach the AI?",
+    a: "No. Only the cleaned version with safe labels—such as [PATIENT_A], Age 58, and [DAY_0]—is sent to the AI writing assistant.",
   },
   {
-    q: "What if something is missed?",
-    a: "A second scan blocks sending if it finds leftovers, and you can highlight any text to replace it.",
+    q: "What file types can I upload?",
+    a: "You can upload PDF, PNG, JPG, and SVG files, or use your device camera to take a photo of a printed page directly inside the app.",
+  },
+  {
+    q: "What if a name or number is missed?",
+    a: "A second safety check blocks sending if any personal detail is still visible. You can also highlight any word on the cleaned page to hide it everywhere in one click.",
   },
   {
     q: "Where are real names stored?",
-    a: "Only in temporary encrypted memory during your session. They are wiped on sign out or after 30 minutes idle.",
+    a: "Only in temporary private memory while you are signed in. They are wiped automatically when you sign out or after 30 minutes of inactivity.",
   },
   {
     q: "Can administrators read my documents?",
-    a: "No. Admins can manage accounts and see activity logs, never document content.",
+    a: "No. Administrators can manage accounts and review general activity counts, never the contents of any patient document.",
   },
   {
-    q: "Which AI providers are used?",
-    a: "Gemini and Groq. If one fails, the other is used automatically.",
+    q: "What happens if an AI service is busy or unavailable?",
+    a: `${APP_NAME} automatically switches to a backup AI writing service so your draft can still be completed smoothly.`,
   },
   {
-    q: "Is this ready for real patients?",
-    a: "This is a demo. Use synthetic data only.",
+    q: "Is this demo ready for real patient records?",
+    a: "This is a demonstration environment. Please use sample (synthetic) data only.",
   },
 ];
 
@@ -40,7 +45,7 @@ export default function FaqPage() {
       <div className="mx-auto max-w-prose px-4 py-16 sm:px-6">
         <h1 className="text-[28px] font-semibold text-text">Frequently asked questions</h1>
         <p className="mt-2 text-[15px] text-text-muted">
-          Key details on privacy, temporary memory, and AI safety.
+          Plain-language answers about privacy, supported files, and how {APP_NAME} works.
         </p>
 
         <div className="mt-8 divide-y divide-border border-y border-border">

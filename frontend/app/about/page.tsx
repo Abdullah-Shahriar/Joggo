@@ -8,56 +8,66 @@ export default function AboutPage() {
         <h1 className="text-[28px] font-semibold text-text">About {APP_NAME}</h1>
 
         <section className="mt-8 space-y-3">
-          <h2 className="text-xl font-semibold text-text">What it is</h2>
+          <h2 className="text-xl font-semibold text-text">What {APP_NAME} does</h2>
           <p className="text-[15px] leading-relaxed text-text">
-            {APP_NAME} is a privacy-first gateway that lets clinicians use modern language models to
-            draft discharge summaries, case summaries, and treatment plans without sending real
-            patient identities to external AI providers.
+            {APP_NAME} helps doctors and care teams write discharge summaries, case summaries, and
+            treatment plans faster with AI—without ever sharing real patient names or contact
+            details with outside services.
           </p>
           <p className="text-[15px] leading-relaxed text-text">
-            Every PDF is extracted, scanned, and tokenized locally on the server. Only sanitized
-            text containing context-preserving placeholders leaves the system, and real details are
-            restored locally in the clinician&apos;s browser session.
-          </p>
-        </section>
-
-        <section className="mt-10 space-y-3 border-t border-border pt-8">
-          <h2 className="text-xl font-semibold text-text">The problem</h2>
-          <p className="text-[15px] leading-relaxed text-text">
-            Hospitals often ban cloud AI tools completely, which pushes busy staff toward unmanaged
-            shadow AI. On the other hand, blunt redaction replaces everything with generic blocks
-            and removes the dates, ages, and timelines that clinical writing depends on.
-          </p>
-          <p className="text-[15px] leading-relaxed text-text">
-            Clinical PDFs also conceal sensitive data beyond visible paragraphs: author metadata,
-            annotations, form fields, and scanned headers or images frequently contain patient names
-            and phone numbers.
+            You can upload a PDF, an image (PNG, JPG, or SVG), or snap a photo with your camera.{" "}
+            {APP_NAME} reads the page privately, swaps personal details for clear labels like{" "}
+            <span className="rounded bg-accent-tint px-1.5 py-0.5 text-sm font-medium text-accent">
+              [PATIENT_A]
+            </span>{" "}
+            and{" "}
+            <span className="rounded bg-accent-tint px-1.5 py-0.5 text-sm font-medium text-accent">
+              Age 58
+            </span>
+            , and lets you review every change before anything is sent. When the draft is ready,
+            the real details are restored only on your screen.
           </p>
         </section>
 
         <section className="mt-10 space-y-3 border-t border-border pt-8">
-          <h2 className="text-xl font-semibold text-text">Our approach</h2>
+          <h2 className="text-xl font-semibold text-text">Why we built it</h2>
           <p className="text-[15px] leading-relaxed text-text">
-            We run local text extraction, OCR, rule-based and local NLP detection across the HIPAA
-            18 identifiers, followed by an independent safety scan and mandatory clinician review.
-            Real values stay exclusively in an AES-256-GCM encrypted in-memory vault tied to the
-            session and are never written to PostgreSQL or logs.
+            Many clinics ban AI tools out of concern for patient privacy, yet busy staff still need
+            help with paperwork. Simple black-bar hiding removes ages and visit timelines, which
+            makes medical summaries hard to write accurately.
           </p>
           <p className="text-[15px] leading-relaxed text-text">
-            Every authentication event, access check, document transition, and administrative action
-            is recorded in an append-only, hash-chained audit log.
+            Patient documents can also hide names outside the main text—such as inside scanned
+            headers, notes, form fields, or file properties. {APP_NAME} checks all of those places
+            automatically.
           </p>
         </section>
 
         <section className="mt-10 space-y-3 border-t border-border pt-8">
-          <h2 className="text-xl font-semibold text-text">Limits</h2>
+          <h2 className="text-xl font-semibold text-text">How your privacy is protected</h2>
           <p className="text-[15px] leading-relaxed text-text">
-            Automated identifier detection combines rules with a small local model and is never
-            perfect. For that reason, a clinician always reviews the cleaned text and can highlight
-            any remaining item to replace it everywhere before approving generation.
+            {APP_NAME} reads typed and photographed pages directly on its own private server, finds
+            personal details (names, phone numbers, addresses, medical record numbers, and exact
+            dates), and runs a second safety check before you review the document. Real patient
+            details stay only in locked temporary memory during your visit and are never saved to
+            the permanent database or server logs.
           </p>
           <p className="text-[15px] leading-relaxed text-text">
-            This deployment is a demonstration environment. Use synthetic clinical records only.
+            Every sign-in, document action, and account change is written to a permanent activity
+            history that cannot be edited or deleted, so compliance reviewers can always verify how
+            the system was used.
+          </p>
+        </section>
+
+        <section className="mt-10 space-y-3 border-t border-border pt-8">
+          <h2 className="text-xl font-semibold text-text">Important note</h2>
+          <p className="text-[15px] leading-relaxed text-text">
+            Automatic privacy checks are helpful, but no automated check is 100% perfect. That is
+            why a doctor always reviews the cleaned document first and can highlight any remaining
+            word to hide it everywhere before approving draft generation.
+          </p>
+          <p className="text-[15px] leading-relaxed text-text">
+            This is a demonstration environment. Please use sample (synthetic) patient records only.
           </p>
         </section>
       </article>
