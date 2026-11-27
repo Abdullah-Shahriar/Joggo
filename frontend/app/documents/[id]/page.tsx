@@ -21,7 +21,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { SendToAiButtons } from "@/components/documents/SendToAiButtons";
-import { SignOutChecklist } from "@/components/documents/SignOutChecklist";
+import { ReviewConfirmCheckbox, SignOutChecklist } from "@/components/documents/SignOutChecklist";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { BrandLoader } from "@/components/ui/BrandLoader";
 import { Button } from "@/components/ui/Button";
@@ -545,10 +545,6 @@ function DocumentReviewContent() {
   const approveAndSendMutation = useMutation({
     mutationFn: async () => {
       if (!doc) return;
-      if (doc.status === "LLM_FAILED") {
-        await apiRequest(`/documents/${docId}/retry`, { method: "POST" });
-        return;
-      }
       if (doc.status === "REVIEW_REQUIRED") {
         const freshSan = await apiRequest<SanitizedTextResponse>(`/documents/${docId}/sanitized`, {
           silentErrorToast: true,
@@ -1025,7 +1021,7 @@ function DocumentReviewContent() {
       {doc.safety_report && (
         <div className="mt-4" aria-live="polite">
           {doc.safety_report.status === "PASS" ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-accent/30 bg-accent-tint/60 px-4 py-3 text-[15px] text-accent">
+            <div className="rounded border border-accent/30 bg-accent-tint/60 px-4 py-3 text-[15px] text-accent">
               <div className="flex items-center gap-2 font-medium">
                 <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
                 <span>
@@ -1035,15 +1031,32 @@ function DocumentReviewContent() {
                 </span>
               </div>
               {canApproveAndSend && (
-                <Button
-                  size="sm"
-                  disabled={!canGenerate}
-                  loading={approveAndSendMutation.isPending}
-                  onClick={() => approveAndSendMutation.mutate()}
-                >
-                  <span>Approve and generate</span>
-                  <ArrowRight className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
-                </Button>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-accent/20 pt-3">
+                  <ReviewConfirmCheckbox
+                    id="top-banner-review-confirm"
+                    prominent
+                    checked={reviewedChecked}
+                    disabled={!canReviewCleaned}
+                    onChange={setReviewedChecked}
+                    label="I reviewed the cleaned text"
+                  />
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {!reviewedChecked && (
+                      <span className="text-xs font-medium text-text-muted">
+                        Tick the box to enable
+                      </span>
+                    )}
+                    <Button
+                      size="sm"
+                      disabled={!canGenerate}
+                      loading={approveAndSendMutation.isPending}
+                      onClick={() => approveAndSendMutation.mutate()}
+                    >
+                      <span>Approve and generate</span>
+                      <ArrowRight className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
           ) : (
@@ -1601,8 +1614,9 @@ function DocumentReviewContent() {
               </div>
             ) : (
               <p className="text-sm text-text-muted">
-                Review the cleaned document on the left against the original on the right, then
-                press &ldquo;Approve and generate&rdquo; below.
+                Review the cleaned document on the left against the original on the right, tick
+                &ldquo;I reviewed the cleaned text&rdquo;, then press &ldquo;Approve and
+                generate&rdquo;.
               </p>
             )}
           </div>

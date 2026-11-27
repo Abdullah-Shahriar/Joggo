@@ -159,7 +159,7 @@ export function RouteProgressBar() {
             fading ? "opacity-0" : "opacity-100"
           }`}
         >
-          <LoaderHelix variant="dna" dots={12} speed={1.5} />
+          <LoaderHelix dots={12} speed={1.5} />
           <div className="flex items-center gap-2 text-sm font-medium text-text-muted">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img

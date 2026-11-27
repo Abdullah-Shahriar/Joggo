@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ApiError, apiRequest, emitToast } from "@/lib/api";
 
-export type ExternalAiProvider = "gemini" | "chatgpt" | "claude";
+type ExternalAiProvider = "gemini" | "chatgpt" | "claude";
 
 const REDIRECT_DELAY_MS = 1500;
 const MAX_URL_PROMPT_CHARS = 3400;
@@ -43,12 +43,9 @@ const AI_TARGETS: ReadonlyArray<{
   },
 ];
 
-function buildTargetUrl(provider: ExternalAiProvider, promptText: string): {
-  url: string;
-  truncatedInUrl: boolean;
-} {
+function buildTargetUrl(provider: ExternalAiProvider, promptText: string): string {
   if (provider === "gemini") {
-    return { url: "https://gemini.google.com/app", truncatedInUrl: false };
+    return "https://gemini.google.com/app";
   }
 
   const truncated = promptText.length > MAX_URL_PROMPT_CHARS;
@@ -58,9 +55,9 @@ function buildTargetUrl(provider: ExternalAiProvider, promptText: string): {
   const encoded = encodeURIComponent(queryPayload);
 
   if (provider === "chatgpt") {
-    return { url: `https://chatgpt.com/?q=${encoded}`, truncatedInUrl: truncated };
+    return `https://chatgpt.com/?q=${encoded}`;
   }
-  return { url: `https://claude.ai/new?q=${encoded}`, truncatedInUrl: truncated };
+  return `https://claude.ai/new?q=${encoded}`;
 }
 
 async function copyTextReliable(text: string): Promise<boolean> {
@@ -168,7 +165,7 @@ export function SendToAiButtons({
         timerRef.current = null;
       }
 
-      const { url } = buildTargetUrl(target.id, res.prompt_text);
+      const url = buildTargetUrl(target.id, res.prompt_text);
       const copied = await copyTextReliable(res.prompt_text);
 
       setHandoffState({

@@ -19,7 +19,7 @@ export function BrandLoader({
           : "flex flex-col items-center justify-center gap-4 py-12"
       }
     >
-      <LoaderHelix variant="dna" dots={12} speed={1.5} />
+      <LoaderHelix dots={12} speed={1.5} />
       <p className="flex h-5 items-center text-sm font-medium text-text-muted">{label}</p>
     </div>
   );

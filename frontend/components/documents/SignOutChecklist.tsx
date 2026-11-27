@@ -9,6 +9,7 @@ export function ReviewConfirmCheckbox({
   label = "I reviewed the cleaned text",
   id,
   boxed = false,
+  prominent = false,
 }: {
   checked: boolean;
   disabled?: boolean;
@@ -16,29 +17,38 @@ export function ReviewConfirmCheckbox({
   label?: string;
   id?: string;
   boxed?: boolean;
+  prominent?: boolean;
 }) {
+  const labelClass = prominent
+    ? disabled
+      ? "inline-flex cursor-not-allowed items-center gap-2.5 rounded border border-border bg-bg-subtle px-3 py-2 text-xs font-medium text-text-muted opacity-60"
+      : checked
+        ? "inline-flex cursor-pointer items-center gap-2.5 rounded border border-accent/50 bg-bg px-3 py-2 text-sm font-medium text-accent transition-colors"
+        : "inline-flex cursor-pointer items-center gap-2.5 rounded border border-accent bg-accent-tint px-3 py-2 text-sm font-medium text-text shadow-[0_1px_2px_rgba(15,118,110,0.14)] transition-colors hover:bg-bg"
+    : boxed
+      ? `flex items-start gap-2.5 rounded border border-border bg-bg-subtle p-3 text-sm text-text ${
+          disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+        }`
+      : `inline-flex items-center gap-2 text-xs font-medium text-text ${
+          disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+        }`;
+
   return (
-    <label
-      htmlFor={id}
-      className={
-        boxed
-          ? `flex items-start gap-2.5 rounded border border-border bg-bg-subtle p-3 text-sm text-text ${
-              disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
-            }`
-          : `inline-flex items-center gap-2 text-xs font-medium text-text ${
-              disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
-            }`
-      }
-    >
+    <label htmlFor={id} className={labelClass}>
       <input
         id={id}
         type="checkbox"
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 shrink-0 accent-accent"
+        className={`${prominent ? "h-[18px] w-[18px]" : "h-4 w-4"} shrink-0 accent-accent`}
       />
       <span>{label}</span>
+      {prominent && !disabled && !checked && (
+        <span className="rounded border border-accent/40 bg-bg px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide text-accent">
+          Required
+        </span>
+      )}
     </label>
   );
 }
@@ -65,7 +75,7 @@ export function SignOutChecklist({
       <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted">
         Sign-out checklist
       </p>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <span className="inline-flex items-center gap-1.5 text-xs text-text">
           <span
             aria-hidden="true"
@@ -100,6 +110,7 @@ export function SignOutChecklist({
 
         <ReviewConfirmCheckbox
           id="signout-review-confirm"
+          prominent
           checked={reviewedChecked}
           disabled={!canReview}
           onChange={onReviewedChange}

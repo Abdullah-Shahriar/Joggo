@@ -361,7 +361,7 @@ function NewDocumentContent() {
             </div>
 
             <div className="mt-6">
-              <LoaderHelix variant="dna" dots={8} speed={1.5} />
+              <LoaderHelix dots={8} speed={1.5} />
             </div>
           </div>
         </section>

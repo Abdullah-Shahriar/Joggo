@@ -7,14 +7,12 @@ import { cn } from "@/lib/utils";
 type LoaderHelixProps = {
   dots?: number;
   speed?: number;
-  variant?: "dna" | "minimal";
   className?: string;
 };
 
 export function LoaderHelix({
   dots = 12,
   speed = 1.6,
-  variant = "dna",
   className,
 }: LoaderHelixProps) {
   const maxDisplacement = 18;
@@ -54,16 +52,14 @@ export function LoaderHelix({
             className="relative flex w-full items-center justify-center"
             style={{ height: dotSpacing }}
           >
-            {variant === "dna" && (
-              <span
-                className="absolute h-[1.5px] bg-accent/35 will-change-transform"
-                style={{
-                  width: maxDisplacement * 2,
-                  animation: `helix-rung-fade ${speed}s ease-in-out infinite`,
-                  animationDelay: `${pair.delayA}s`,
-                }}
-              />
-            )}
+            <span
+              className="absolute h-[1.5px] bg-accent/35 will-change-transform"
+              style={{
+                width: maxDisplacement * 2,
+                animation: `helix-rung-fade ${speed}s ease-in-out infinite`,
+                animationDelay: `${pair.delayA}s`,
+              }}
+            />
 
             <div
               className="absolute rounded-full bg-accent will-change-transform"

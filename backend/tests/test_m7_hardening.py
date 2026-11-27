@@ -219,17 +219,20 @@ def test_gemini_model_validation_discovery_thinking_config_and_startup_log(
         ]
     }
     assert _pick_best_gemini_model(payload, exclude=set()) == "gemini-2.5-flash"
-    # When gemini-2.5-flash is excluded, avoids -image and -live
-    assert _pick_best_gemini_model(payload, exclude={"gemini-2.5-flash"}) == "gemini-flash-latest" or _pick_best_gemini_model(
-        {
-            "models": [
-                {"name": "models/gemini-2.5-flash-image", "supportedGenerationMethods": ["generateContent"]},
-                {"name": "models/gemini-2.0-flash-live-001", "supportedGenerationMethods": ["generateContent"]},
-                {"name": "models/gemini-2.0-flash", "supportedGenerationMethods": ["generateContent"]},
-            ]
-        },
-        exclude=set(),
-    ) == "gemini-2.0-flash"
+    # When gemini-2.5-flash is absent, avoids -image and -live and selects gemini-2.0-flash
+    assert (
+        _pick_best_gemini_model(
+            {
+                "models": [
+                    {"name": "models/gemini-2.5-flash-image", "supportedGenerationMethods": ["generateContent"]},
+                    {"name": "models/gemini-2.0-flash-live-001", "supportedGenerationMethods": ["generateContent"]},
+                    {"name": "models/gemini-2.0-flash", "supportedGenerationMethods": ["generateContent"]},
+                ]
+            },
+            exclude=set(),
+        )
+        == "gemini-2.0-flash"
+    )
 
     # Request payload sets thinkingBudget=0 for gemini-2.5-flash and omits it for gemini-2.0-flash
     captured_payloads: list[dict] = []

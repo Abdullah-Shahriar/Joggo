@@ -26,6 +26,13 @@ declare global {
   }
 }
 
+type ConfigState = "loading" | "ready" | "unconfigured" | "error";
+
+// Cache a fetched runtime Client ID in memory across /login <-> /signup route switches
+let cachedRuntimeClientId = "";
+
+const CONFIG_RETRY_DELAYS_MS = [2000, 4000, 6000, 8000];
+
 export function GoogleSignInButton({
   portal = "doctor",
   mode = "signin",
@@ -38,8 +45,11 @@ export function GoogleSignInButton({
   onError: (message: string) => void;
 }) {
   const buildTimeId = (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "").trim();
-  const [clientId, setClientId] = useState<string>(buildTimeId);
-  const [configChecked, setConfigChecked] = useState<boolean>(Boolean(buildTimeId));
+  const initialId = buildTimeId || cachedRuntimeClientId;
+
+  const [clientId, setClientId] = useState<string>(initialId);
+  const [configState, setConfigState] = useState<ConfigState>(initialId ? "ready" : "loading");
+  const [retryNonce, setRetryNonce] = useState<number>(0);
   const [scriptLoaded, setScriptLoaded] = useState<boolean>(false);
   const [scriptFailed, setScriptFailed] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -51,34 +61,58 @@ export function GoogleSignInButton({
     onErrorRef.current = onError;
   }, [onSuccess, onError]);
 
-  // Fetch runtime Google Client ID from backend (/api/auth/config) if not baked at build time
+  // Fetch runtime Google Client ID from backend (/api/auth/config) with automatic retries
+  // so a Render free-tier cold start or transient 502/504 never falsely disables Google sign-in.
   useEffect(() => {
     if (buildTimeId) {
       setClientId(buildTimeId);
-      setConfigChecked(true);
+      setConfigState("ready");
       return;
     }
+    if (cachedRuntimeClientId) {
+      setClientId(cachedRuntimeClientId);
+      setConfigState("ready");
+      return;
+    }
+
     let active = true;
-    apiRequest<{ google_client_id: string | null }>("/auth/config", {
-      redirectOn401: false,
-      silentErrorToast: true,
-    })
-      .then((res) => {
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    setConfigState("loading");
+
+    const fetchConfig = async (attempt: number) => {
+      try {
+        const res = await apiRequest<{ google_client_id: string | null }>("/auth/config", {
+          redirectOn401: false,
+          silentErrorToast: true,
+        });
         if (!active) return;
-        if (res.google_client_id) {
-          setClientId(res.google_client_id);
+        const resolved = (res.google_client_id || "").trim();
+        if (resolved) {
+          cachedRuntimeClientId = resolved;
+          setClientId(resolved);
+          setConfigState("ready");
+        } else {
+          setConfigState("unconfigured");
         }
-      })
-      .catch(() => {
-        // Ignore; button remains gracefully disabled
-      })
-      .finally(() => {
-        if (active) setConfigChecked(true);
-      });
+      } catch {
+        if (!active) return;
+        if (attempt < CONFIG_RETRY_DELAYS_MS.length) {
+          retryTimer = setTimeout(() => {
+            if (active) void fetchConfig(attempt + 1);
+          }, CONFIG_RETRY_DELAYS_MS[attempt]);
+        } else {
+          setConfigState("error");
+        }
+      }
+    };
+
+    void fetchConfig(0);
+
     return () => {
       active = false;
+      if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [buildTimeId]);
+  }, [buildTimeId, retryNonce]);
 
   // Detect Google GSI availability even when the script was already loaded on a prior route
   // or finishes asynchronously after clientId arrives from /api/auth/config.
@@ -137,13 +171,31 @@ export function GoogleSignInButton({
     });
   }, [clientId, scriptLoaded, portal, mode]);
 
-  if (!configChecked) {
+  if (configState === "loading") {
     return (
-      <div className="h-10 w-full animate-pulse rounded border border-border bg-bg-subtle" />
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex h-10 w-full animate-pulse items-center justify-center rounded border border-border bg-bg-subtle px-3 text-xs text-text-muted"
+      >
+        Loading Google sign-in…
+      </div>
     );
   }
 
-  if (!clientId) {
+  if (configState === "error") {
+    return (
+      <button
+        type="button"
+        onClick={() => setRetryNonce((n) => n + 1)}
+        className="flex h-10 w-full items-center justify-center rounded border border-border bg-bg px-3 text-sm font-medium text-text hover:bg-bg-subtle"
+      >
+        Server waking up — click to load Google sign-in
+      </button>
+    );
+  }
+
+  if (configState === "unconfigured" || !clientId) {
     return (
       <button
         type="button"
