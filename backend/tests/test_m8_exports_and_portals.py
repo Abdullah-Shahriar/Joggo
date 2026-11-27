@@ -1,6 +1,8 @@
 import io
 import uuid
+import zipfile
 
+from docx import Document as DocxDocument
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -9,7 +11,7 @@ import pymupdf
 from app.db import SessionLocal
 from app.models import User, UserRole, UserStatus
 from app.security import hash_password
-from app.services.exporter import export_jpg, export_pdf, export_png
+from app.services.exporter import export_docx, export_jpg, export_pdf, export_png, export_txt
 from tests.conftest import CSRF_HEADERS
 
 
@@ -98,9 +100,13 @@ def test_export_pdf_png_and_jpg_outputs_are_valid() -> None:
     doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
     try:
         assert doc.page_count >= 1
-        extracted = doc.load_page(0).get_text("text")
+        page0 = doc.load_page(0)
+        extracted = page0.get_text("text")
         assert "Discharge Summary" in extracted
         assert "Rahim Ahmed" in extracted
+        assert "JOGGO" in extracted
+        # Centered JOGGO logo image watermark embedded on page
+        assert len(page0.get_images()) >= 1
     finally:
         doc.close()
 
@@ -109,12 +115,33 @@ def test_export_pdf_png_and_jpg_outputs_are_valid() -> None:
     with Image.open(io.BytesIO(png_bytes)) as im_png:
         assert im_png.format == "PNG"
         assert im_png.width > 400 and im_png.height > 400
+        # Center watermark region contains non-white pixels from the JOGGO logo
+        cx, cy = im_png.width // 2, im_png.height // 2
+        center_crop = im_png.crop((cx - 120, cy - 120, cx + 120, cy + 120))
+        assert any(px != (255, 255, 255) for px in center_crop.getdata())
 
     jpg_bytes = export_jpg(sample)
     assert jpg_bytes.startswith(b"\xff\xd8\xff")
     with Image.open(io.BytesIO(jpg_bytes)) as im_jpg:
         assert im_jpg.format == "JPEG"
         assert im_jpg.width > 400 and im_jpg.height > 400
+
+    # DOCX contains behind-text JOGGO logo watermark in header media while header/footer text remains empty
+    docx_bytes = export_docx(sample)
+    with zipfile.ZipFile(io.BytesIO(docx_bytes)) as zf:
+        names = zf.namelist()
+        assert any(n.startswith("word/media/") and n.endswith(".png") for n in names), names
+        header_xml = "".join(zf.read(n).decode("utf-8", errors="ignore") for n in names if "header" in n)
+        assert 'behindDoc="1"' in header_xml
+    parsed_docx = DocxDocument(io.BytesIO(docx_bytes))
+    for sec in parsed_docx.sections:
+        assert "".join(p.text for p in sec.header.paragraphs).strip() == ""
+        assert "".join(p.text for p in sec.footer.paragraphs).strip() == ""
+
+    # TXT includes subtle JOGGO watermark footer
+    txt_out = export_txt(sample).decode("utf-8")
+    assert "Rahim Ahmed" in txt_out
+    assert "[JOGGO] Watermark" in txt_out
 
 
 def test_manual_mark_handles_mixed_token_text_punctuation_and_re_marking(app: FastAPI) -> None:
